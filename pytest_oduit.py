@@ -10,25 +10,17 @@ import ast
 import os
 import signal
 import subprocess
-import sys
 import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
+from unittest import TestCase as UnitTestTestCase
 from unittest import mock
 
 import _pytest
 import _pytest.python
 import odoo
 import pytest
-
-try:
-    from oduit_core.builders import BaseOdooCommandBuilder, ConfigProvider
-    from oduit_core.config_loader import has_local_config, load_local_config
-
-    ODUIT_CORE_AVAILABLE = True
-except ImportError:
-    ODUIT_CORE_AVAILABLE = False
 
 
 def pytest_addoption(parser):
@@ -39,61 +31,42 @@ def pytest_addoption(parser):
         help="Log-level used by the Odoo process during tests",
     )
     parser.addoption(
+        "--oduit-env", action="store", help="Path of the Odoo configuration file"
+    )
+    parser.addoption(
         "--odoo-http",
         action="store_true",
         help="If pytest should launch an Odoo http server.",
     )
-    parser.addoption("--odoo-dev", action="store")
 
 
 def _has_oduit_config():
-    """Check if .oduit.toml file exists using oduit_core config loader."""
-    if ODUIT_CORE_AVAILABLE:
-        from oduit_core.config_loader import has_local_config
+    """Check if .oduit.toml file exists using oduit config loader."""
+    from oduit.config_loader import ConfigLoader
 
-        return has_local_config()
-    else:
-        # Fallback: simple file existence check
-        return os.path.exists(".oduit.toml")
-
-
-def _load_oduit_config():
-    """Load .oduit.toml configuration using oduit_core config loader."""
-    if ODUIT_CORE_AVAILABLE:
-        from oduit_core.config_loader import load_local_config
-
-        return load_local_config()
-    else:
-        # Fallback: basic TOML parsing
-        try:
-            if sys.version_info >= (3, 11):
-                import tomllib
-            else:
-                import tomli as tomllib
-        except ImportError:
-            raise ImportError(
-                "TOML support not available. Install with: pip install tomli"
-            )
-
-        with open(".oduit.toml", "rb") as f:
-            return tomllib.load(f)
+    return ConfigLoader().has_local_config()
 
 
 def _build_odoo_config_with_oduit_core(config):
-    """Build Odoo configuration using oduit_core builders."""
+    """Build Odoo configuration using oduit builders."""
 
-    from oduit_core.builders import BaseOdooCommandBuilder, ConfigProvider
+    from oduit.builders import ConfigProvider
+    from oduit.config_loader import ConfigLoader
 
     # Start with configuration from .oduit.toml if it exists
     config_dict = {}
+    config_loader = ConfigLoader()
     try:
-        toml_config = _load_oduit_config()
-        config_dict.update(toml_config)
+        if config.getoption("--oduit-env"):
+            config = config_loader.load_config(config.getoption("--oduit-env"))
+        else:
+            config = config_loader.load_local_config()
+        config_dict.update(config)
     except Exception as e:
         # If .oduit.toml exists but can't be loaded, warn but continue
         import warnings
 
-        warnings.warn(f"Failed to load .oduit.toml: {e}")
+        warnings.warn(f"Failed to load .oduit.toml: {e}", stacklevel=2)
     # Create ConfigProvider and builder
     config_provider = ConfigProvider(config_dict)
 
@@ -106,21 +79,20 @@ def _build_odoo_config_with_oduit_core(config):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_cmdline_main(config):
-    if _has_oduit_config():
-        # Use oduit_core builders for command line construction
+    if _has_oduit_config() or config.getoption("--oduit-env"):
+        # Use oduit builders for command line construction
         options = _build_odoo_config_with_oduit_core(config)
         print(options)
         value = config.getoption("--odoo-log-level")
         if value:
-            options.append("%s=%s" % ("--log-level", value))
+            options.append(f"--log-level={value}")
         odoo.tools.config.parse_config(options)
 
         if not odoo.tools.config["db_name"]:
-            # if you fall here, it means you have ODOO_RC or OPENERP_SERVER pointing
-            # to a configuration file without 'database' configuration
             raise Exception(
-                "please provide a database name in the Odoo configuration file"
+                "please provide a database name in the Oduit configuration file"
             )
+        support_subtest()
         disable_odoo_test_retry()
         monkey_patch_resolve_pkg_root_and_module_name()
         odoo.service.server.start(preload=[], stop=True)
@@ -241,6 +213,22 @@ def monkey_patch_resolve_pkg_root_and_module_name():
         return pkg_root, module_name
 
     _pytest.pathlib.resolve_pkg_root_and_module_name = resolve_pkg_root_and_module_name
+
+
+def support_subtest():
+    """Odoo from version 16.0 re-define its own TestCase.subTest context manager
+    Odoo assume the usage of OdooTestResult which is not our case
+    using with pytest-odoo. So this fallback to the unitest.TestCase.subTest
+    Context manager
+    """
+    try:
+        from odoo.tests.case import TestCase
+
+        TestCase.subTest = UnitTestTestCase.subTest
+        TestCase.run = UnitTestTestCase.run
+    except ImportError:
+        # Odoo <= 15.0
+        pass
 
 
 def disable_odoo_test_retry():

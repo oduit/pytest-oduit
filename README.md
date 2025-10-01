@@ -20,7 +20,7 @@ pip install pytest-oduit
 
 - Python >= 3.9
 - pytest >= 8
-- oduit-core
+- oduit
 - Odoo (any supported version)
 
 ## Usage
@@ -33,6 +33,10 @@ Simply run pytest in your Odoo addon directory:
 pytest
 ```
 
+### Other pytest plugins
+
+This plugin works also together `pytest-subtests` and `pytest-xdist`.
+
 ### Command Line Options
 
 - `--odoo-log-level`: Set the log level for Odoo processes during tests (default: 'critical')
@@ -44,6 +48,7 @@ pytest
 The plugin automatically detects and uses `.oduit.toml` configuration files when available. This provides seamless integration with oduit-core for database configuration, addon paths, and other Odoo settings.
 
 Example `.oduit.toml`:
+
 ```toml
 [odoo]
 db_name = "test_db"
@@ -53,6 +58,7 @@ addons_path = ["./addons", "./custom_addons"]
 ### Module Path Resolution
 
 The plugin automatically resolves Odoo addon module paths, ensuring that:
+
 - Test modules in `addon_name/tests/` are properly recognized as `odoo.addons.addon_name.tests.test_module`
 - Only installable addons (with `installable: True` in `__manifest__.py`) are collected for testing
 - Namespace packages are handled correctly

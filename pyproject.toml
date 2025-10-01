@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-oduit"
+description = "py.test plugin to run Odoo tests"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "AGPLv3"}
+authors = [
+    {name = "Holger Nahrstaedt", email = "holger.nahrstaedt@hasomed.de"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: POSIX",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "pytest>=8",
+    "oduit"
+]
+
+dynamic=["version"]
+
+
+[tool.setuptools_scm]
+write_to = "_version.py"
+
+
+[project.urls]
+Homepage = "https://github.com/oduit/pytest-oduit"
+
+[project.entry-points.pytest11]
+odoo = "pytest_oduit"
+
+[tool.setuptools]
+py-modules = ["pytest_oduit"]
+zip-safe = false
+include-package-data = true
+platforms = ["any"]
