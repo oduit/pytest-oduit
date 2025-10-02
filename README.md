@@ -96,7 +96,7 @@ AGPLv3 - see LICENSE file for details.
 
 ## Authors
 
-- Holger Nahrstaedt <holger.nahrstaedt@hasomed.de>
+- Holger Nahrstaedt
 - Based on original work by Pierre Verkest and Camptocamp SA
 
 ## Contributing
