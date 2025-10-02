@@ -21,6 +21,7 @@ import _pytest
 import _pytest.python
 import odoo
 import pytest
+from psycopg2 import ProgrammingError
 
 
 def pytest_addoption(parser):
@@ -34,9 +35,9 @@ def pytest_addoption(parser):
         "--oduit-env", action="store", help="Path of the Odoo configuration file"
     )
     parser.addoption(
-        "--odoo-http",
-        action="store_true",
-        help="If pytest should launch an Odoo http server.",
+        "--odoo-install",
+        action="store",
+        help="Define modules which should be installed.",
     )
 
 
@@ -85,16 +86,31 @@ def pytest_cmdline_main(config):
         value = config.getoption("--odoo-log-level")
         if value:
             options.append(f"--log-level={value}")
+
+        value_install = config.getoption("--odoo-install")
+        if value_install:
+            options.append(f"--init={value_install}")
         odoo.tools.config.parse_config(options)
 
-        if not odoo.tools.config["db_name"]:
-            raise Exception(
-                "please provide a database name in the Oduit configuration file"
-            )
+        config = odoo.tools.config  # type: ignore
+
+        # Set up database preloading
+        preload = []
+        if config["db_name"]:  # type: ignore
+            preload = config["db_name"].split(",")  # type: ignore
+            for db_name in preload:
+                try:
+                    odoo.service.db._create_empty_database(db_name)
+                    config["init"]["base"] = True  # type: ignore
+                except ProgrammingError as err:
+                    raise err
+                except odoo.service.db.DatabaseExists:
+                    pass
+
         support_subtest()
         disable_odoo_test_retry()
         monkey_patch_resolve_pkg_root_and_module_name()
-        odoo.service.server.start(preload=[], stop=True)
+        odoo.service.server.start(preload=preload, stop=True)
         # odoo.service.server.start() modifies the SIGINT signal by its own
         # one which in fact prevents us to stop anthem with Ctrl-c.
         # Restore the default one.
@@ -111,13 +127,6 @@ def pytest_cmdline_main(config):
             yield
     else:
         yield
-
-
-@pytest.fixture(scope="module", autouse=True)
-def load_http(request):
-    if request.config.getoption("--odoo-http"):
-        odoo.service.server.start(stop=True)
-        signal.signal(signal.SIGINT, signal.default_int_handler)
 
 
 @contextmanager

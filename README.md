@@ -18,12 +18,14 @@ A pytest plugin for running Odoo tests with enhanced functionality and integrati
 pip install pytest-oduit
 ```
 
+Note: pytest-odoo must not be installed.
+
 ## Requirements
 
 - Python >= 3.9
 - pytest >= 8
 - oduit
-- Odoo (any supported version)
+- Odoo >= 15.0
 
 ## Usage
 
@@ -42,12 +44,12 @@ This plugin works also together `pytest-subtests` and `pytest-xdist`.
 ### Command Line Options
 
 - `--odoo-log-level`: Set the log level for Odoo processes during tests (default: 'critical')
-- `--odoo-http`: Launch an Odoo HTTP server during tests
-- `--odoo-dev`: Development mode options
+- `--odoo-install`: Set a module to install during tests
+- `--oduit-env`: Set the oduit config file, when not specified a local `.oduit.toml` configuration is needed.oduit.toml` configuration is needed.
 
 ### Configuration
 
-The plugin automatically detects and uses `.oduit.toml` configuration files when available. This provides seamless integration with oduit-core for database configuration, addon paths, and other Odoo settings.
+The plugin automatically detects and uses `.oduit.toml` configuration files when available. This provides seamless integration with oduit for database configuration, addon paths, and other Odoo settings.
 
 Example `.oduit.toml`:
 
