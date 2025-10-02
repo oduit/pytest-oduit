@@ -21,7 +21,6 @@ import _pytest
 import _pytest.python
 import odoo
 import pytest
-from psycopg2 import ProgrammingError
 
 
 def pytest_addoption(parser):
@@ -102,10 +101,10 @@ def pytest_cmdline_main(config):
                 try:
                     odoo.service.db._create_empty_database(db_name)
                     config["init"]["base"] = True  # type: ignore
-                except ProgrammingError as err:
-                    raise err
                 except odoo.service.db.DatabaseExists:
                     pass
+                except Exception as err:
+                    raise err
 
         support_subtest()
         disable_odoo_test_retry()

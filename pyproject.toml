@@ -27,7 +27,6 @@ classifiers = [
 ]
 dependencies = [
     "pytest>=8",
-    "psycopg2",
     "oduit",
 ]
 
