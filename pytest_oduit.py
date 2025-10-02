@@ -82,7 +82,6 @@ def pytest_cmdline_main(config):
     if _has_oduit_config() or config.getoption("--oduit-env"):
         # Use oduit builders for command line construction
         options = _build_odoo_config_with_oduit_core(config)
-        print(options)
         value = config.getoption("--odoo-log-level")
         if value:
             options.append(f"--log-level={value}")
