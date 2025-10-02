@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/oduit/pytest-oduit/graph/badge.svg?token=4VKN1JL1UM)](https://codecov.io/gh/oduit/pytest-oduit)
+
 # pytest-oduit
 
 A pytest plugin for running Odoo tests with enhanced functionality and integration with oduit-core.
