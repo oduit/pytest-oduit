@@ -94,6 +94,7 @@ jobs:
 
       - name: Install Odoo dependencies
         run: |
+          pip install gevent==24.11.1
           pip install -r https://github.com/odoo/odoo/raw/${{ matrix.odoo-version }}/requirements.txt
 
       - name: Cache Odoo repository
