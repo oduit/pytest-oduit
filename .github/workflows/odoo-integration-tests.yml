@@ -30,6 +30,16 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Build pytest-oduit wheel
+        run: |
+          pip install build
+          python -m build --wheel
+      
       - name: Pull Odoo Docker image
         run: docker pull odoo:${{ matrix.odoo-version }}
       
@@ -52,13 +62,11 @@ jobs:
       - name: Install dependencies in container
         run: |
           docker exec --user root odoo apt-get update
-          docker exec --user root odoo apt-get install -y git python3-pytest python3-pip
-          docker exec --user root odoo chown -R odoo:odoo /mnt/pytest-oduit
+          docker exec --user root odoo apt-get install -y python3-pytest python3-pip
       
-      - name: Upgrade setuptools and install pytest-oduit
+      - name: Install pytest-oduit wheel in container
         run: |
-          docker exec --user root odoo pip3 install --break-system-packages --upgrade setuptools
-          docker exec --user root odoo bash -c 'cd /mnt/pytest-oduit && python3 -m pip install --break-system-packages -e .'
+          docker exec --user root odoo pip3 install /mnt/pytest-oduit/dist/*.whl
       
       - name: Run pytest tests inside container
         run: |
