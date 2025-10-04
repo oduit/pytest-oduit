@@ -53,8 +53,8 @@ jobs:
         run: |
           docker exec --user root odoo apt-get update
           docker exec --user root odoo apt-get install -y git
-          docker exec odoo pip install pytest
-          docker exec odoo pip install -e /mnt/pytest-oduit
+          docker exec --user root odoo pip install pytest
+          docker exec --user root odoo pip install -e /mnt/pytest-oduit
       
       - name: Run pytest tests inside container
         run: |
