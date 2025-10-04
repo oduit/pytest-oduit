@@ -40,6 +40,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            python3-virtualenv \
             libpq-dev \
             libldap2-dev \
             libsasl2-dev \
@@ -92,9 +93,14 @@ jobs:
             python3-zeep \
             python3-ldap
 
+      - name: Create virtual environment
+        run: |
+          python -m venv venv
+          echo "$GITHUB_WORKSPACE/venv/bin" >> $GITHUB_PATH
+
       - name: Install Odoo dependencies
         run: |
-          pip install -r https://github.com/odoo/odoo/raw/${{ matrix.odoo-version }}/requirements.txt
+          venv/bin/pip install -r https://github.com/odoo/odoo/raw/${{ matrix.odoo-version }}/requirements.txt
 
       - name: Cache Odoo repository
         uses: actions/cache@v4
@@ -114,11 +120,11 @@ jobs:
 
       - name: Install Odoo
         run: |
-          cd odoo && pip install .
+          venv/bin/pip install ./odoo
  
       - name: Install pytest-oduit
         run: |
-          pip install -e .
+          venv/bin/pip install -e .
 
       - name: Create .oduit.toml configuration
         run: |
@@ -136,4 +142,4 @@ jobs:
 
       - name: Run pytest tests locally
         run: |
-          pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
+          venv/bin/pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
