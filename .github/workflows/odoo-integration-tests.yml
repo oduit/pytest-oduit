@@ -137,6 +137,10 @@ jobs:
             addons_path = ["odoo/addons"]
           EOF
 
+      - name: Remove mock dir
+        run: |
+          rm -rf tests/mock/odoo
+
       - name: Run pytest tests locally
         run: |
           venv/bin/pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
