@@ -102,14 +102,6 @@ jobs:
         run: |
           venv/bin/pip install -r https://github.com/odoo/odoo/raw/${{ matrix.odoo-version }}/requirements.txt
 
-      - name: Cache Odoo repository
-        uses: actions/cache@v4
-        with:
-          path: odoo
-          key: odoo-${{ matrix.odoo-version }}-${{ hashFiles('.github/workflows/odoo-integration-tests.yml') }}
-          restore-keys: |
-            odoo-${{ matrix.odoo-version }}-
-
       - name: Checkout Odoo
         uses: actions/checkout@v4
         with:
@@ -141,5 +133,10 @@ jobs:
           EOF
 
       - name: Run pytest tests locally
+        env:
+          PGUSER: odoo
+          PGPASSWORD: odoo
+          PGHOST: localhost
+          PGPORT: 5432
         run: |
           venv/bin/pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
