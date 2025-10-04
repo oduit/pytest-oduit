@@ -89,6 +89,19 @@ def pytest_cmdline_main(config):
         value_install = config.getoption("--odoo-install")
         if value_install:
             options.append(f"--init={value_install}")
+        else:
+            addon_names = set()
+            for arg in config.args:
+                arg_path = Path(arg).resolve()
+                if arg_path.exists():
+                    addon_name = _extract_addon_name(arg_path)
+                    if addon_name:
+                        addon_names.add(addon_name)
+
+            if addon_names:
+                modules = ",".join(sorted(addon_names))
+                options.append(f"--init={modules}")
+        print(options)
         odoo.tools.config.parse_config(options)
 
         config = odoo.tools.config  # type: ignore
@@ -264,6 +277,19 @@ def _find_manifest_path(collection_path: Path) -> Path:
     else:
         return None
     return path.parent / "__manifest__.py"
+
+
+def _extract_addon_name(test_path: Path) -> Optional[str]:
+    """Extract addon module name from test file path or addon directory."""
+    # Check if the path itself is an addon directory
+    if test_path.is_dir() and (test_path / "__manifest__.py").is_file():
+        return test_path.name
+
+    # Otherwise, search parent directories
+    for parent in test_path.parents:
+        if (parent / "__manifest__.py").is_file():
+            return parent.name
+    return None
 
 
 def pytest_ignore_collect(collection_path: Path) -> Optional[bool]:
