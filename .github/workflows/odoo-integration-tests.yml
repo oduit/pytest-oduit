@@ -51,8 +51,8 @@ jobs:
       
       - name: Install git and pytest-oduit in container
         run: |
-          docker exec odoo apt-get update
-          docker exec odoo apt-get install -y git
+          docker exec --user root odoo apt-get update
+          docker exec --user root odoo apt-get install -y git
           docker exec odoo pip install pytest
           docker exec odoo pip install -e /mnt/pytest-oduit
       
