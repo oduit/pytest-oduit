@@ -99,7 +99,10 @@ def pytest_cmdline_main(config):
             # No --odoo-install flag: auto-detect modules from test paths
             addon_names = set()
             for arg in config.args:
-                arg_path = Path(arg).resolve()
+                # Handle pytest node IDs (e.g., path/to/test.py::TestClass::test_method)
+                # Extract just the file path part before '::'
+                path_str = arg.split("::")[0]
+                arg_path = Path(path_str).resolve()
                 if arg_path.exists():
                     addon_name = _extract_addon_name(arg_path)
                     if addon_name:
@@ -108,7 +111,6 @@ def pytest_cmdline_main(config):
             if addon_names:
                 modules = ",".join(sorted(addon_names))
                 options.append(f"--init={modules}")
-        print(options)
         odoo.tools.config.parse_config(options)
 
         config = odoo.tools.config  # type: ignore
