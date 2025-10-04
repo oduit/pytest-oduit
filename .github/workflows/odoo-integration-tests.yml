@@ -62,12 +62,12 @@ jobs:
       - name: Install dependencies in container
         run: |
           docker exec --user root odoo apt-get update
-          docker exec --user root odoo apt-get install -y python3-pytest python3-pip
+          docker exec --user root odoo apt-get install -y python3-pytest unzip
       
       - name: Install pytest-oduit wheel in container
         run: |
           WHEEL_FILE=$(ls dist/*.whl)
-          docker exec --user root odoo pip3 install /mnt/pytest-oduit/$WHEEL_FILE
+          docker exec --user root odoo bash -c "cd /tmp && unzip -q /mnt/pytest-oduit/$WHEEL_FILE && cp -r pytest_oduit.py pytest_oduit-*.dist-info /usr/local/lib/python3/dist-packages/"
       
       - name: Run pytest tests inside container
         run: |
