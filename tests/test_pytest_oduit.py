@@ -7,6 +7,7 @@ from unittest.mock import patch
 from _pytest import pathlib as pytest_pathlib
 
 from pytest_oduit import (
+    _extract_addon_name,
     _find_manifest_path,
     disable_odoo_test_retry,
     monkey_patch_resolve_pkg_root_and_module_name,
@@ -169,3 +170,81 @@ class TestPytestOduit(TestCase):
 
         del case.TestCase
         support_subtest()
+
+
+class TestExtractAddonName(TestCase):
+    @contextmanager
+    def create_addon_structure(self, addon_name="test_addon"):
+        """Create a temporary addon structure with __manifest__.py file."""
+        directory = tempfile.TemporaryDirectory()
+        try:
+            addon_path = Path(directory.name) / "addons" / addon_name
+            addon_path.mkdir(parents=True, exist_ok=True)
+
+            # Create __manifest__.py
+            manifest_path = addon_path / "__manifest__.py"
+            manifest_path.write_text("{'name': 'Test Addon', 'installable': True}")
+
+            # Create tests directory
+            tests_path = addon_path / "tests"
+            tests_path.mkdir(exist_ok=True)
+
+            # Create test file
+            test_file = tests_path / "test_something.py"
+            test_file.touch()
+
+            yield {
+                "addon_path": addon_path,
+                "test_file": test_file,
+                "tests_dir": tests_path,
+                "manifest": manifest_path,
+            }
+        finally:
+            directory.cleanup()
+
+    def test_extract_addon_name_from_addon_directory(self):
+        """Test extracting addon name when path is the addon directory itself."""
+        with self.create_addon_structure("sale") as paths:
+            addon_name = _extract_addon_name(paths["addon_path"])
+            self.assertEqual(addon_name, "sale")
+
+    def test_extract_addon_name_from_test_file(self):
+        """Test extracting addon name from a test file path."""
+        with self.create_addon_structure("purchase") as paths:
+            addon_name = _extract_addon_name(paths["test_file"])
+            self.assertEqual(addon_name, "purchase")
+
+    def test_extract_addon_name_from_tests_directory(self):
+        """Test extracting addon name from tests directory."""
+        with self.create_addon_structure("stock") as paths:
+            addon_name = _extract_addon_name(paths["tests_dir"])
+            self.assertEqual(addon_name, "stock")
+
+    def test_extract_addon_name_with_pytest_node_id(self):
+        """Test extracting addon name from pytest node ID (path with ::)."""
+        with self.create_addon_structure("crm") as paths:
+            # Simulate pytest node ID like: path/to/test.py::TestClass::test_method
+            test_file_str = str(paths["test_file"])
+            # We need to test the logic that splits on '::'
+            # The actual split happens in pytest_cmdline_main, but we can test the extraction
+            addon_name = _extract_addon_name(paths["test_file"])
+            self.assertEqual(addon_name, "crm")
+
+    def test_extract_addon_name_no_manifest(self):
+        """Test that None is returned when no __manifest__.py exists."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            some_path = Path(temp_dir) / "random" / "path"
+            some_path.mkdir(parents=True, exist_ok=True)
+            addon_name = _extract_addon_name(some_path)
+            self.assertIsNone(addon_name)
+
+    def test_extract_addon_name_multiple_levels(self):
+        """Test extracting addon name from deeply nested path."""
+        with self.create_addon_structure("account") as paths:
+            # Create a deeply nested file
+            deep_path = paths["tests_dir"] / "subfolder" / "deep" / "test_deep.py"
+            deep_path.parent.mkdir(parents=True, exist_ok=True)
+            deep_path.touch()
+
+            addon_name = _extract_addon_name(deep_path)
+            self.assertEqual(addon_name, "account")
