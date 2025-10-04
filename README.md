@@ -55,25 +55,48 @@ This plugin works also together `pytest-subtests` and `pytest-xdist`.
 ### Command Line Options
 
 - `--odoo-log-level`: Set the log level for Odoo processes during tests (default: 'critical')
-- `--odoo-install`: Manually specify modules to install during tests (overrides automatic detection)
-- `--oduit-env`: Set the oduit config file, when not specified a local `.oduit.toml` configuration is needed
+- `--odoo-install`: Control module installation behavior:
+  - **Not specified** (default): Automatically detect and install modules based on test paths
+  - **`--odoo-install=module1,module2`**: Manually specify modules to install (disables auto-detection)
+  - **`--odoo-install=""`**: Disable all module installation
+- `--oduit-env`: Set the oduit config file path (when not specified, uses local `.oduit.toml`)
 
 ### Automatic Module Installation
 
-When running tests, the plugin automatically detects which addon modules are being tested and initializes them in Odoo by adding them to the `--init` parameter. This works by:
+By default, the plugin automatically detects which addon modules are being tested and initializes them in Odoo. This eliminates the need to manually specify modules for each test run.
 
-1. Analyzing the test paths provided to pytest
-2. Extracting addon names by locating `__manifest__.py` files
-3. Automatically appending `--init=<detected_modules>` to the Odoo configuration
+**How it works:**
 
-This feature only activates when:
+1. Analyzes the test paths provided to pytest
+2. Extracts addon names by locating `__manifest__.py` files
+3. Automatically appends `--init=<detected_modules>` to the Odoo configuration
+
+**Examples:**
+
+```bash
+# Auto-detect and install modules
+pytest addons/sale                    # Installs: sale
+pytest addons/sale addons/purchase    # Installs: purchase, sale
+pytest addons/sale/tests/test_sale.py # Installs: sale
+
+# Manually specify modules (overrides auto-detection)
+pytest --odoo-install=sale,purchase addons/crm  # Installs: sale, purchase (NOT crm)
+
+# Disable all module installation
+pytest --odoo-install="" addons/sale  # Installs: nothing
+```
+
+**When automatic detection activates:**
+
 - A `.oduit.toml` configuration file is present or `--oduit-env` is specified
-- `--odoo-install` is not explicitly provided (manual specification takes precedence)
+- `--odoo-install` is not provided (no manual override)
 
-The automatic detection supports:
-- Addon directories: `pytest addons/my_module`
-- Test files: `pytest addons/my_module/tests/test_something.py`
-- Multiple addons: `pytest addons/module_a addons/module_b`
+**Supported path types:**
+
+- Addon directories: `addons/my_module`
+- Test files: `addons/my_module/tests/test_something.py`
+- Subdirectories: `addons/my_module/tests/`
+- Multiple addons: `addons/module_a addons/module_b`
 
 ### Configuration
 

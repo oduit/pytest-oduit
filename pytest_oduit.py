@@ -36,7 +36,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--odoo-install",
         action="store",
-        help="Define modules which should be installed.",
+        help="Control module installation: specify modules (e.g., 'sale,purchase'), "
+        "use empty string to disable (--odoo-install=''), "
+        "or omit to auto-detect from test paths (default).",
     )
 
 
@@ -87,9 +89,14 @@ def pytest_cmdline_main(config):
             options.append(f"--log-level={value}")
 
         value_install = config.getoption("--odoo-install")
-        if value_install:
-            options.append(f"--init={value_install}")
+        if value_install is not None:
+            # Explicit --odoo-install provided
+            if value_install:
+                # Non-empty value: install specified modules
+                options.append(f"--init={value_install}")
+            # Empty value (--odoo-install=""): skip installation entirely
         else:
+            # No --odoo-install flag: auto-detect modules from test paths
             addon_names = set()
             for arg in config.args:
                 arg_path = Path(arg).resolve()
