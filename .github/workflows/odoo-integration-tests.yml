@@ -4,7 +4,7 @@ on: [push, pull_request]
 jobs:
   odoo-tests:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -19,22 +19,22 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-    
+
     strategy:
       matrix:
         odoo-version: ["17.0", "18.0"]
         python-version: ["3.10", "3.11", "3.12"]
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-     
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -90,6 +90,14 @@ jobs:
             python3-zeep \
             python3-ldap
 
+      - name: Cache Odoo repository
+        uses: actions/cache@v4
+        with:
+          path: odoo
+          key: odoo-${{ matrix.odoo-version }}-${{ hashFiles('.github/workflows/odoo-integration-tests.yml') }}
+          restore-keys: |
+            odoo-${{ matrix.odoo-version }}-
+
       - name: Checkout Odoo
         uses: actions/checkout@v4
         with:
@@ -97,15 +105,19 @@ jobs:
           ref: ${{ matrix.odoo-version }}
           path: odoo
           fetch-depth: 0
-          
+
       - name: Install Odoo dependencies
         run: |
           pip install -r odoo/requirements.txt
-      
+
+      - name: Install Odoo
+        run: |
+          cd odoo && pip install .
+ 
       - name: Install pytest-oduit
         run: |
           pip install -e .
-      
+
       - name: Create .oduit.toml configuration
         run: |
           cat > .oduit.toml << 'EOF'
@@ -119,7 +131,7 @@ jobs:
             db_password = "odoo"
             addons_path = ["odoo/addons"]
           EOF
-      
+
       - name: Run pytest tests locally
         run: |
           pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
