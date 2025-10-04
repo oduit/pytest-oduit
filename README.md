@@ -19,7 +19,8 @@ A pytest plugin for running Odoo tests with enhanced functionality and integrati
 pip install pytest-oduit
 ```
 
-Note: pytest-odoo must not be installed.
+Note: pytest-odoo must not be installed. Never run pytest for testing odoo
+modules inside the source dir of pytest-oduit (as then the odoo mock is loaded).
 
 ## Requirements
 
