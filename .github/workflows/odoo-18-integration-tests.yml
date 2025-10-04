@@ -141,4 +141,4 @@ jobs:
 
       - name: Run pytest tests locally
         run: |
-          venv/bin/pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
+          venv/bin/pytest --verbose --odoo-log-level info odoo/addons/calendar/
