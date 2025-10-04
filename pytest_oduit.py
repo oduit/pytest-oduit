@@ -31,6 +31,11 @@ def pytest_addoption(parser):
         help="Log-level used by the Odoo process during tests",
     )
     parser.addoption(
+        "--odoo-http",
+        action="store_true",
+        help="If pytest should launch an Odoo http server.",
+    )
+    parser.addoption(
         "--oduit-env", action="store", help="Path of the Odoo configuration file"
     )
     parser.addoption(
@@ -74,8 +79,8 @@ def _build_odoo_config_with_oduit_core(config):
 
     # Build options list by extracting relevant configuration
     return config_provider.get_odoo_params_list(
-        ["config_file", "data_dir", "http_port", "gevent_port"],
-        replace_underscore=False,
+        ["config_file", "data-dir", "http-port", "gevent-port"],
+        replace_underscore=True,
     )
 
 
@@ -148,6 +153,13 @@ def pytest_cmdline_main(config):
             yield
     else:
         yield
+
+
+@pytest.fixture(scope="module", autouse=True)
+def load_http(request):
+    if request.config.getoption("--odoo-http"):
+        odoo.service.server.start(stop=True)
+        signal.signal(signal.SIGINT, signal.default_int_handler)
 
 
 @contextmanager

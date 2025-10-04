@@ -224,9 +224,9 @@ class TestExtractAddonName(TestCase):
         """Test extracting addon name from pytest node ID (path with ::)."""
         with self.create_addon_structure("crm") as paths:
             # Simulate pytest node ID like: path/to/test.py::TestClass::test_method
-            test_file_str = str(paths["test_file"])
             # We need to test the logic that splits on '::'
-            # The actual split happens in pytest_cmdline_main, but we can test the extraction
+            # The actual split happens in pytest_cmdline_main,
+            # but we can test the extraction
             addon_name = _extract_addon_name(paths["test_file"])
             self.assertEqual(addon_name, "crm")
 
