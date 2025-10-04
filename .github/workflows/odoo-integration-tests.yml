@@ -35,49 +35,36 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       
-      - name: Build pytest-oduit wheel
+      - name: Checkout Odoo
+        uses: actions/checkout@v4
+        with:
+          repository: odoo/odoo
+          ref: ${{ matrix.odoo-version }}
+          path: odoo
+          fetch-depth: 0
+      
+      - name: Install Odoo dependencies
         run: |
-          pip install build
-          python -m build --wheel
+          pip install -r odoo/requirements.txt
       
-      - name: Pull Odoo Docker image
-        run: docker pull odoo:${{ matrix.odoo-version }}
-      
-      - name: Start Odoo container
+      - name: Install pytest-oduit
         run: |
-          docker run -d \
-            --name odoo \
-            --network host \
-            -v ${{ github.workspace }}:/mnt/pytest-oduit \
-            -e HOST=localhost \
-            -e USER=odoo \
-            -e PASSWORD=odoo \
-            odoo:${{ matrix.odoo-version }}
+          pip install -e .
       
-      - name: Wait for Odoo to be ready
+      - name: Create .oduit.toml configuration
         run: |
-          timeout 120 bash -c 'until docker logs odoo 2>&1 | grep -q "odoo.modules.loading: Modules loaded."; do sleep 2; done' || true
-          sleep 5
+          cat > .oduit.toml << 'EOF'
+          [binaries]
+            odoo_bin = "odoo"
+          [odoo_params]
+            db_name = "test_db"
+            db_host = "localhost"
+            db_port = 5432
+            db_user = "odoo"
+            db_password = "odoo"
+            addons_path = ["odoo/addons"]
+          EOF
       
-      - name: Install dependencies in container
+      - name: Run pytest tests locally
         run: |
-          docker exec --user root odoo apt-get update
-          docker exec --user root odoo apt-get install -y python3-pytest unzip
-      
-      - name: Install pytest-oduit wheel in container
-        run: |
-          WHEEL_FILE=$(ls dist/*.whl)
-          PYTHON_VERSION=$(docker exec odoo python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          docker exec --user root odoo bash -c "cd /tmp && unzip -q /mnt/pytest-oduit/$WHEEL_FILE && cp -r pytest_oduit.py pytest_oduit-*.dist-info /usr/local/lib/python${PYTHON_VERSION}/dist-packages/"
-      
-      - name: Run pytest tests inside container
-        run: |
-          docker exec odoo pytest --verbose --odoo-log-level info --odoo-http /usr/lib/python3/dist-packages/odoo/addons/calendar/
-      
-      - name: Show Odoo logs on failure
-        if: failure()
-        run: docker logs odoo
-      
-      - name: Stop Odoo container
-        if: always()
-        run: docker stop odoo && docker rm odoo
+          pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
