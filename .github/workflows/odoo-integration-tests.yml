@@ -67,7 +67,8 @@ jobs:
       - name: Install pytest-oduit wheel in container
         run: |
           WHEEL_FILE=$(ls dist/*.whl)
-          docker exec --user root odoo bash -c "cd /tmp && unzip -q /mnt/pytest-oduit/$WHEEL_FILE && cp -r pytest_oduit.py pytest_oduit-*.dist-info /usr/local/lib/python3/dist-packages/"
+          PYTHON_VERSION=$(docker exec odoo python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          docker exec --user root odoo bash -c "cd /tmp && unzip -q /mnt/pytest-oduit/$WHEEL_FILE && cp -r pytest_oduit.py pytest_oduit-*.dist-info /usr/local/lib/python${PYTHON_VERSION}/dist-packages/"
       
       - name: Run pytest tests inside container
         run: |
