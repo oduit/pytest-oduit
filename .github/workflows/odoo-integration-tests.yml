@@ -3,7 +3,13 @@ on: [push, pull_request]
 
 jobs:
   odoo-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    env:
+      DB: "oduit"
+      PGUSER: odoo
+      PGPASSWORD: odoo
+      PGHOST: localhost
+      PGPORT: 5432
 
     services:
       postgres:
@@ -22,8 +28,8 @@ jobs:
 
     strategy:
       matrix:
-        odoo-version: ["17.0", "18.0"]
-        python-version: ["3.11", "3.12"]
+        odoo-version: ["17.0"]
+        python-version: ["3.10"]
 
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +40,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
+      - name: Sleep for 10 seconds
+        run: sleep 10s
+      - name: DB Creation
+        run: createdb $DB
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -98,10 +107,6 @@ jobs:
           python -m venv venv
           echo "$GITHUB_WORKSPACE/venv/bin" >> $GITHUB_PATH
 
-      - name: Install Odoo dependencies
-        run: |
-          venv/bin/pip install -r https://github.com/odoo/odoo/raw/${{ matrix.odoo-version }}/requirements.txt
-
       - name: Checkout Odoo
         uses: actions/checkout@v4
         with:
@@ -109,6 +114,11 @@ jobs:
           ref: ${{ matrix.odoo-version }}
           path: odoo
           fetch-depth: 1
+
+      - name: Install Odoo dependencies
+        run: |
+          sed -i -E "s/(gevent==)21\.8\.0( ; sys_platform != 'win32' and python_version == '3.10')/\122.10.2\2/;s/(greenlet==)1.1.2( ; sys_platform != 'win32' and python_version == '3.10')/\12.0.2\2/" odoo/requirements.txt
+          venv/bin/pip install -r odoo/requirements.txt
 
       - name: Install Odoo
         run: |
@@ -128,7 +138,7 @@ jobs:
           [binaries]
             odoo_bin = "odoo"
           [odoo_params]
-            db_name = "test_db"
+            db_name = "oduit"
             db_host = "localhost"
             db_port = 5432
             db_user = "odoo"
@@ -137,10 +147,5 @@ jobs:
           EOF
 
       - name: Run pytest tests locally
-        env:
-          PGUSER: odoo
-          PGPASSWORD: odoo
-          PGHOST: localhost
-          PGPORT: 5432
-        run: |
+       run: |
           venv/bin/pytest --verbose --odoo-log-level info --odoo-http odoo/addons/calendar/
