@@ -132,8 +132,6 @@ jobs:
             odoo_bin = "odoo"
           [odoo_params]
             db_name = "oduit"
-            db_host = "localhost"
-            db_port = 5432
             db_user = "odoo"
             db_password = "odoo"
             addons_path = ["odoo/addons"]
