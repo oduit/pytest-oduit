@@ -134,6 +134,7 @@ jobs:
             db_name = "oduit"
             db_user = "odoo"
             db_password = "odoo"
+            db_port = 5432
             http_port = 8075
             gevent_port = 8076
             addons_path = ["odoo/addons"]
