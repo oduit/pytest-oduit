@@ -10,6 +10,7 @@ jobs:
       PGPASSWORD: odoo
       PGHOST: localhost
       PGPORT: 5432
+      ODOO: "./odoo/odoo-bin"
     services:
       postgres:
         image: postgres:15
@@ -137,6 +138,10 @@ jobs:
             db_password = "odoo"
             addons_path = ["odoo/addons"]
           EOF
+
+      - name: Remove mock Odoo to use real installation
+        run: |
+          rm -rf tests/mock/odoo
 
       - name: Run pytest tests locally
         run: |
