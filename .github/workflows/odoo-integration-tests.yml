@@ -28,8 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-
+        path: pytest-oduit
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -119,7 +118,7 @@ jobs:
  
       - name: Install pytest-oduit
         run: |
-          venv/bin/pip install -e .
+          venv/bin/pip install ./pytest-oduit
 
       - name: Debug Odoo installation
         run: |
@@ -136,10 +135,6 @@ jobs:
             db_password = "odoo"
             addons_path = ["odoo/addons"]
           EOF
-
-      - name: Remove mock dir
-        run: |
-          rm -rf tests/mock/odoo
 
       - name: Run pytest tests locally
         run: |
