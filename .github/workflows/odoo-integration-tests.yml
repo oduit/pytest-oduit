@@ -53,6 +53,7 @@ jobs:
         run: |
           docker exec --user root odoo apt-get update
           docker exec --user root odoo apt-get install -y git python3-venv
+          docker exec --user root odoo chown -R odoo:odoo /mnt/pytest-oduit
           docker exec odoo python3 -m venv /tmp/venv
           docker exec odoo /tmp/venv/bin/pip install pytest
           docker exec odoo /tmp/venv/bin/pip install -e /mnt/pytest-oduit
