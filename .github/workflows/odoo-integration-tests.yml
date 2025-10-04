@@ -66,7 +66,8 @@ jobs:
       
       - name: Install pytest-oduit wheel in container
         run: |
-          docker exec --user root odoo pip3 install /mnt/pytest-oduit/dist/*.whl
+          WHEEL_FILE=$(ls dist/*.whl)
+          docker exec --user root odoo pip3 install /mnt/pytest-oduit/$WHEEL_FILE
       
       - name: Run pytest tests inside container
         run: |
