@@ -52,13 +52,14 @@ jobs:
       - name: Install git and pytest-oduit in container
         run: |
           docker exec --user root odoo apt-get update
-          docker exec --user root odoo apt-get install -y git
-          docker exec odoo pip install pytest
-          docker exec odoo pip install -e /mnt/pytest-oduit
+          docker exec --user root odoo apt-get install -y git python3-venv
+          docker exec odoo python3 -m venv /tmp/venv
+          docker exec odoo /tmp/venv/bin/pip install pytest
+          docker exec odoo /tmp/venv/bin/pip install -e /mnt/pytest-oduit
       
       - name: Run pytest tests inside container
         run: |
-          docker exec odoo pytest --verbose --odoo-log-level info --odoo-http /usr/lib/python3/dist-packages/odoo/addons/calendar/
+          docker exec odoo /tmp/venv/bin/pytest --verbose --odoo-log-level info --odoo-http /usr/lib/python3/dist-packages/odoo/addons/calendar/
       
       - name: Show Odoo logs on failure
         if: failure()
