@@ -79,7 +79,7 @@ def _build_odoo_config_with_oduit_core(config):
 
     # Build options list by extracting relevant configuration
     return config_provider.get_odoo_params_list(
-        ["config_file", "data-dir", "http-port", "gevent-port"],
+        ["config_file", "data-dir", "http-port", "gevent-port", "http-interface"],
         replace_underscore=True,
     )
 

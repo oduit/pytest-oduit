@@ -137,6 +137,7 @@ jobs:
             db_port = 5432
             http_port = 8075
             gevent_port = 8076
+            http_interface = "0.0.0.0"
             addons_path = ["odoo/addons"]
           EOF
 
