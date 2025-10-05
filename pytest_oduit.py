@@ -136,7 +136,21 @@ def pytest_cmdline_main(config):
         support_subtest()
         disable_odoo_test_retry()
         monkey_patch_resolve_pkg_root_and_module_name()
+
         odoo.service.server.start(preload=preload, stop=True)
+
+        # Manually spawn HTTP server if not already spawned
+        # This is needed for HttpCase tests which require server.httpd to be initialized
+        # The server.start() with stop=True doesn't spawn HTTP unless test_enable was True
+        # at the time of calling start(), but we can't set it early or it triggers
+        # at_install tests during module loading
+        if (
+            odoo.service.server.server
+            and hasattr(odoo.service.server.server, "httpd")
+            and odoo.service.server.server.httpd is None
+        ):
+            odoo.service.server.server.http_spawn()
+
         # odoo.service.server.start() modifies the SIGINT signal by its own
         # one which in fact prevents us to stop anthem with Ctrl-c.
         # Restore the default one.
