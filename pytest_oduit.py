@@ -45,6 +45,20 @@ def get_odoo_version() -> OdooVersionInfo:
         return (999, 0, 0, "final", 0, "")
 
 
+try:
+    import odoo.api
+    import odoo.modules.module
+    import odoo.modules.registry
+    import odoo.release
+    import odoo.service.db
+    import odoo.service.server
+    import odoo.sql_db
+    import odoo.tests.common
+    import odoo.tools
+except (ImportError, AttributeError):
+    pass
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--odoo-log-level",
@@ -138,6 +152,7 @@ def pytest_cmdline_main(config):
             if addon_names:
                 modules = ",".join(sorted(addon_names))
                 options.append(f"--init={modules}")
+
         odoo.tools.config.parse_config(options)
 
         config = odoo.tools.config  # type: ignore
@@ -145,15 +160,19 @@ def pytest_cmdline_main(config):
         # Set up database preloading
         preload = []
         if config["db_name"]:  # type: ignore
-            preload = config["db_name"].split(",")  # type: ignore
+            db_name_value = config["db_name"]  # type: ignore
+            if isinstance(db_name_value, list):
+                preload = db_name_value
+            else:
+                preload = db_name_value.split(",")
             for db_name in preload:
                 try:
                     odoo.service.db._create_empty_database(db_name)
-                    config["init"]["base"] = True  # type: ignore
                 except odoo.service.db.DatabaseExists:
                     pass
                 except Exception as err:
                     raise err
+                config["init"]["base"] = True  # type: ignore
 
         support_subtest()
         disable_odoo_test_retry()
