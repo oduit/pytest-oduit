@@ -156,9 +156,6 @@ def pytest_cmdline_main(config):
         # Restore the default one.
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
-        if odoo.release.version_info >= (18,):
-            odoo.modules.module.current_test = True
-
         if odoo.release.version_info < (15,):
             # Refactor in Odoo 15, not needed anymore
             with odoo.api.Environment.manage():
@@ -167,6 +164,27 @@ def pytest_cmdline_main(config):
             yield
     else:
         yield
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    try:
+        if odoo.release.version_info >= (18,):
+            try:
+                from odoo.tests import BaseCase
+
+                if isinstance(item.instance, BaseCase):
+                    odoo.modules.module.current_test = item.instance
+            except (ImportError, AttributeError):
+                pass
+    except AttributeError:
+        pass
+    yield
+    try:
+        if odoo.release.version_info >= (18,):
+            odoo.modules.module.current_test = False
+    except AttributeError:
+        pass
 
 
 @pytest.fixture(scope="module", autouse=True)
