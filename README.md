@@ -61,7 +61,7 @@ This plugin works also together `pytest-subtests` and `pytest-xdist`.
   - **`--odoo-install=module1,module2`**: Manually specify modules to install (disables auto-detection)
   - **`--odoo-install=""`**: Disable all module installation
 - `--oduit-env`: Set the oduit config file path (when not specified, uses local `.oduit.toml`)
-- `--odoo-http`: Enables http server for testing tours
+- `--odoo-http`: Enables http server for testing tours (only needed for Odoo < 18)
 
 ### Automatic Module Installation
 

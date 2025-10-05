@@ -69,7 +69,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--odoo-http",
         action="store_true",
-        help="If pytest should launch an Odoo http server.",
+        help="If pytest should launch an Odoo http server (only needed for Odoo < 18).",
     )
     parser.addoption(
         "--oduit-env", action="store", help="Path of the Odoo configuration file"
