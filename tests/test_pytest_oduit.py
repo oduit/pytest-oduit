@@ -10,6 +10,7 @@ from pytest_oduit import (
     _extract_addon_name,
     _find_manifest_path,
     disable_odoo_test_retry,
+    get_odoo_version,
     monkey_patch_resolve_pkg_root_and_module_name,
     support_subtest,
 )
@@ -248,3 +249,56 @@ class TestExtractAddonName(TestCase):
 
             addon_name = _extract_addon_name(deep_path)
             self.assertEqual(addon_name, "account")
+
+
+class TestGetOdooVersion(TestCase):
+    def test_get_odoo_version_returns_tuple(self):
+        """Test that get_odoo_version returns a tuple."""
+        version = get_odoo_version()
+        self.assertIsInstance(version, tuple)
+        self.assertGreaterEqual(len(version), 2)
+
+    def test_get_odoo_version_with_version_info(self):
+        """Test get_odoo_version when odoo.release.version_info exists."""
+        import odoo
+
+        if hasattr(odoo, "release") and hasattr(odoo.release, "version_info"):
+            version = get_odoo_version()
+            self.assertEqual(version, odoo.release.version_info)
+        else:
+            self.skipTest("odoo.release.version_info not available in test environment")
+
+    def test_get_odoo_version_without_version_info(self):
+        """Test get_odoo_version when odoo.release.version_info doesn't exist."""
+        import odoo
+
+        if not hasattr(odoo, "release"):
+            version = get_odoo_version()
+            self.assertEqual(version, (999, 0, 0, "final", 0, ""))
+            return
+
+        original_version_info = None
+        has_version_info = hasattr(odoo.release, "version_info")
+        if has_version_info:
+            original_version_info = odoo.release.version_info
+
+        def restore_version_info():
+            if has_version_info:
+                odoo.release.version_info = original_version_info
+
+        self.addCleanup(restore_version_info)
+
+        if has_version_info:
+            del odoo.release.version_info
+
+        version = get_odoo_version()
+        self.assertEqual(version, (999, 0, 0, "final", 0, ""))
+
+    def test_get_odoo_version_comparison(self):
+        """Test that get_odoo_version result can be compared with tuples."""
+        version = get_odoo_version()
+
+        self.assertTrue(version < (1000,))
+        self.assertTrue(version >= (0,))
+
+        self.assertIsInstance(version[0], int)

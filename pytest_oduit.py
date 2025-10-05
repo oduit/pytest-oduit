@@ -22,6 +22,28 @@ import _pytest.python
 import odoo
 import pytest
 
+OdooVersionInfo = tuple[int, int, int, str, int, str]
+
+
+def get_odoo_version() -> OdooVersionInfo:
+    """Get Odoo version as a tuple, defaulting to latest if unavailable.
+
+    Returns:
+        A tuple of (MAJOR, MINOR, MICRO, RELEASE_LEVEL, SERIAL, EXTRA)
+        where RELEASE_LEVEL is one of 'alpha', 'beta', 'candidate', or 'final'.
+        Returns (999, 0, 0, 'final', 0, '') if version_info is unavailable.
+
+    Example:
+        >>> version = get_odoo_version()
+        >>> if version >= (18, 0):
+        ...     # Odoo 18.0 or later specific code
+        ...     pass
+    """
+    try:
+        return odoo.release.version_info  # type: ignore[attr-defined]
+    except AttributeError:
+        return (999, 0, 0, "final", 0, "")
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -141,7 +163,8 @@ def pytest_cmdline_main(config):
 
         # Manually spawn HTTP server if not already spawned
         # This is needed for HttpCase tests which require server.httpd to be initialized
-        # The server.start() with stop=True doesn't spawn HTTP unless test_enable was True
+        # The server.start() with stop=True doesn't spawn HTTP unless test_enable
+        # was True
         # at the time of calling start(), but we can't set it early or it triggers
         # at_install tests during module loading
         if (
@@ -156,7 +179,7 @@ def pytest_cmdline_main(config):
         # Restore the default one.
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
-        if odoo.release.version_info < (15,):
+        if get_odoo_version() < (15,):
             # Refactor in Odoo 15, not needed anymore
             with odoo.api.Environment.manage():
                 yield
@@ -168,28 +191,22 @@ def pytest_cmdline_main(config):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
-    try:
-        if odoo.release.version_info >= (18,):
-            try:
-                from odoo.tests import BaseCase
+    if get_odoo_version() >= (18,):
+        try:
+            from odoo.tests import BaseCase
 
-                if isinstance(item.instance, BaseCase):
-                    odoo.modules.module.current_test = item.instance
-            except (ImportError, AttributeError):
-                pass
-    except AttributeError:
-        pass
+            if isinstance(item.instance, BaseCase):
+                odoo.modules.module.current_test = item.instance
+        except (ImportError, AttributeError):
+            pass
     yield
-    try:
-        if odoo.release.version_info >= (18,):
-            odoo.modules.module.current_test = False
-    except AttributeError:
-        pass
+    if get_odoo_version() >= (18,):
+        odoo.modules.module.current_test = False
 
 
 @pytest.fixture(scope="module", autouse=True)
 def load_http(request):
-    if request.config.getoption("--odoo-http") and odoo.release.version_info < (18,):
+    if request.config.getoption("--odoo-http") and get_odoo_version() < (18,):
         odoo.service.server.start(stop=True)
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
