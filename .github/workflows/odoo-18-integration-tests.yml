@@ -121,10 +121,6 @@ jobs:
         run: |
           venv/bin/pip install ./pytest-oduit
 
-      - name: Debug Odoo installation
-        run: |
-          venv/bin/python -c "import odoo; print('Odoo version:', odoo.release.version); print('Odoo attributes:', dir(odoo)); import sys; print('Odoo path:', odoo.__file__)"
-
       - name: Create .oduit.toml configuration
         run: |
           cat > .oduit.toml << 'EOF'

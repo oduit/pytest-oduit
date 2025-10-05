@@ -189,7 +189,7 @@ def pytest_runtest_call(item):
 
 @pytest.fixture(scope="module", autouse=True)
 def load_http(request):
-    if request.config.getoption("--odoo-http"):
+    if request.config.getoption("--odoo-http") and odoo.release.version_info < (18,):
         odoo.service.server.start(stop=True)
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
