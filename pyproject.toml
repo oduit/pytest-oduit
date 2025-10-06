@@ -27,7 +27,7 @@ classifiers = [
 ]
 dependencies = [
     "pytest>=8",
-    "oduit",
+    "oduit>=0.1.6",
 ]
 
 dynamic=["version"]

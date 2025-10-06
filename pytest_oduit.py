@@ -114,10 +114,7 @@ def _build_odoo_config_with_oduit_core(config):
     config_provider = ConfigProvider(config_dict)
 
     # Build options list by extracting relevant configuration
-    return config_provider.get_odoo_params_list(
-        ["config_file", "data-dir", "http-port", "gevent-port", "http-interface"],
-        replace_underscore=True,
-    )
+    return config_provider.get_odoo_params_list(skip_keys=["config_file"])
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -152,7 +149,6 @@ def pytest_cmdline_main(config):
             if addon_names:
                 modules = ",".join(sorted(addon_names))
                 options.append(f"--init={modules}")
-
         odoo.tools.config.parse_config(options)
 
         config = odoo.tools.config  # type: ignore
@@ -172,7 +168,6 @@ def pytest_cmdline_main(config):
                     pass
                 except Exception as err:
                     raise err
-                config["init"]["base"] = True  # type: ignore
 
         support_subtest()
         disable_odoo_test_retry()
