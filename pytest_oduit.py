@@ -101,10 +101,10 @@ def _build_odoo_config_with_oduit_core(config):
     config_loader = ConfigLoader()
     try:
         if config.getoption("--oduit-env"):
-            config = config_loader.load_config(config.getoption("--oduit-env"))
+            env_config = config_loader.load_config(config.getoption("--oduit-env"))
         else:
-            config = config_loader.load_local_config()
-        config_dict.update(config)
+            env_config = config_loader.load_local_config()
+        config_dict.update(env_config)
     except Exception as e:
         # If .oduit.toml exists but can't be loaded, warn but continue
         import warnings
@@ -117,11 +117,58 @@ def _build_odoo_config_with_oduit_core(config):
     return config_provider.get_odoo_params_list(skip_keys=["config_file"])
 
 
+def _find_unknown_odoo_options(options: list[str]) -> list[str]:
+    """Return generated options that are unknown to Odoo's OptionParser."""
+    parser = getattr(odoo.tools.config, "parser", None)
+    long_opt = getattr(parser, "_long_opt", None)
+    short_opt = getattr(parser, "_short_opt", None)
+    if not isinstance(long_opt, dict) or not isinstance(short_opt, dict):
+        return []
+
+    known_options = set(long_opt.keys()) | set(short_opt.keys())
+    unknown_options = []
+    for option in options:
+        if not option.startswith("-"):
+            continue
+        option_name = option.split("=", 1)[0]
+        if option_name not in known_options:
+            unknown_options.append(option_name)
+
+    return sorted(set(unknown_options))
+
+
+def _validate_generated_odoo_options(options: list[str], config_source: str) -> None:
+    """Raise a clear UsageError if generated Odoo options are invalid."""
+    unknown_options = _find_unknown_odoo_options(options)
+    if not unknown_options:
+        return
+
+    hints = []
+    for option in unknown_options:
+        if option.startswith("--db-"):
+            hints.append(f"{option} -> {option.replace('--db-', '--db_', 1)}")
+
+    hints_message = ""
+    if hints:
+        hints_message = " Hint: DB options in Odoo often use underscores, e.g. "
+        hints_message += ", ".join(hints)
+
+    raise pytest.UsageError(
+        "Invalid Odoo option(s) generated from oduit configuration "
+        f"({config_source}): {', '.join(unknown_options)}."
+        " Check option names in your .oduit.toml / --oduit-env file."
+        f"{hints_message}"
+    )
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_cmdline_main(config):
     if _has_oduit_config() or config.getoption("--oduit-env"):
         # Use oduit builders for command line construction
         options = _build_odoo_config_with_oduit_core(config)
+        config_source = config.getoption("--oduit-env") or str(
+            Path.cwd() / ".oduit.toml"
+        )
         value = config.getoption("--odoo-log-level")
         if value:
             options.append(f"--log-level={value}")
@@ -149,7 +196,17 @@ def pytest_cmdline_main(config):
             if addon_names:
                 modules = ",".join(sorted(addon_names))
                 options.append(f"--init={modules}")
-        odoo.tools.config.parse_config(options)
+
+        _validate_generated_odoo_options(options, config_source)
+
+        try:
+            odoo.tools.config.parse_config(options)
+        except SystemExit as err:
+            rendered_options = ", ".join(options)
+            raise pytest.UsageError(
+                "Failed to parse Odoo options generated from oduit configuration "
+                f"({config_source}). Generated options: {rendered_options}"
+            ) from err
 
         config = odoo.tools.config  # type: ignore
 

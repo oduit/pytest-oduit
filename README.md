@@ -2,7 +2,7 @@
 
 # pytest-oduit
 
-A pytest plugin for running Odoo tests with enhanced functionality and integration with oduit-core.
+A pytest plugin for running Odoo tests with automatic Odoo setup and oduit integration.
 
 ## Features
 
@@ -12,6 +12,7 @@ A pytest plugin for running Odoo tests with enhanced functionality and integrati
 - **Test retry management**: Disables Odoo's built-in test retry mechanism to work seamlessly with pytest
 - **Distributed testing support**: Works with pytest-xdist for parallel test execution
 - **HTTP server support**: Optional Odoo HTTP server launch for integration tests
+- **Actionable config errors**: Surfaces clearer messages when generated Odoo options are invalid
 
 ## Installation
 
@@ -19,8 +20,8 @@ A pytest plugin for running Odoo tests with enhanced functionality and integrati
 pip install pytest-oduit
 ```
 
-Note: pytest-odoo must not be installed. Never run pytest for testing odoo
-modules inside the source dir of pytest-oduit (as then the odoo mock is loaded).
+Note: `pytest-odoo` must not be installed. Also, do not run Odoo module tests from
+inside the `pytest-oduit` source directory (it contains Odoo mocks used for this project's own tests).
 
 ## Requirements
 
@@ -60,7 +61,7 @@ This plugin works also together `pytest-subtests` and `pytest-xdist`.
   - **Not specified** (default): Automatically detect and install modules based on test paths
   - **`--odoo-install=module1,module2`**: Manually specify modules to install (disables auto-detection)
   - **`--odoo-install=""`**: Disable all module installation
-- `--oduit-env`: Set the oduit config file path (when not specified, uses local `.oduit.toml`)
+- `--oduit-env`: Path to an oduit config file (if omitted, uses local `.oduit.toml` in current directory)
 - `--odoo-http`: Enables http server for testing tours (only needed for Odoo < 18)
 
 ### Automatic Module Installation
@@ -102,13 +103,39 @@ pytest --odoo-install="" addons/sale  # Installs: nothing
 
 ### Configuration
 
-The plugin automatically detects and uses `.oduit.toml` configuration files when available. This provides seamless integration with oduit for database configuration, addon paths, and other Odoo settings.
+The plugin loads configuration from one of these sources:
+
+1. `--oduit-env=/path/to/config.toml` (explicit path)
+2. Local `.oduit.toml` in the current working directory
+
+This config is converted into Odoo CLI options and passed to `odoo.tools.config.parse_config()`.
+Use valid Odoo option keys (for example, `db_maxconn`, not `db-maxconn`).
 
 Example `.oduit.toml`:
 
 ```toml
-[odoo]
+python_bin = "/path/to/.venv/bin/python"
+odoo_bin = "/path/to/odoo/odoo-bin"
 db_name = "test_db"
+db_user = "odoo"
+db_password = "odoo"
+db_host = "127.0.0.1"
+db_port = 5432
+db_maxconn = 64
+http_port = 8069
+addons_path = ["./addons", "./custom_addons"]
+```
+
+Sectioned format is also supported:
+
+```toml
+[binaries]
+python_bin = "/path/to/.venv/bin/python"
+odoo_bin = "/path/to/odoo/odoo-bin"
+
+[odoo_params]
+db_name = "test_db"
+db_maxconn = 64
 addons_path = ["./addons", "./custom_addons"]
 ```
 
@@ -129,6 +156,21 @@ pytest -n auto  # Run tests in parallel using all available CPUs
 ```
 
 The plugin automatically creates isolated database copies for each worker to prevent conflicts.
+
+### Troubleshooting
+
+If startup fails with an error like:
+
+```text
+pytest: error: no such option: --db-maxconn
+```
+
+check your oduit config key names. Some Odoo DB options use underscores in their CLI names.
+
+- Correct: `db_maxconn` -> `--db_maxconn`
+- Incorrect: `db-maxconn` -> `--db-maxconn`
+
+`pytest-oduit` now raises a clearer `pytest.UsageError` for invalid generated Odoo options and includes a hint for common DB option naming mistakes.
 
 ## Development
 

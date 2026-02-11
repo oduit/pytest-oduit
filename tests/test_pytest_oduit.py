@@ -1,14 +1,18 @@
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
+import pytest
 from _pytest import pathlib as pytest_pathlib
 
 from pytest_oduit import (
     _extract_addon_name,
     _find_manifest_path,
+    _find_unknown_odoo_options,
+    _validate_generated_odoo_options,
     disable_odoo_test_retry,
     get_odoo_version,
     monkey_patch_resolve_pkg_root_and_module_name,
@@ -302,3 +306,40 @@ class TestGetOdooVersion(TestCase):
         self.assertTrue(version >= (0,))
 
         self.assertIsInstance(version[0], int)
+
+
+class TestOptionValidation(TestCase):
+    def test_find_unknown_odoo_options_detects_invalid_db_option(self):
+        parser = SimpleNamespace(
+            _long_opt={
+                "--database": object(),
+                "--db_maxconn": object(),
+                "--workers": object(),
+            },
+            _short_opt={},
+        )
+
+        with patch("odoo.tools.config.parser", parser):
+            unknown = _find_unknown_odoo_options(
+                ["--database=test", "--db-maxconn=64", "--workers=4"]
+            )
+
+        self.assertEqual(unknown, ["--db-maxconn"])
+
+    def test_validate_generated_odoo_options_has_actionable_message(self):
+        parser = SimpleNamespace(
+            _long_opt={"--database": object(), "--db_maxconn": object()},
+            _short_opt={},
+        )
+
+        with patch("odoo.tools.config.parser", parser):
+            with pytest.raises(pytest.UsageError) as exc_info:
+                _validate_generated_odoo_options(
+                    ["--database=test", "--db-maxconn=64"],
+                    "/tmp/.oduit.toml",
+                )
+
+        message = str(exc_info.value)
+        self.assertIn("/tmp/.oduit.toml", message)
+        self.assertIn("--db-maxconn", message)
+        self.assertIn("--db_maxconn", message)
