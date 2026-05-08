@@ -1,4 +1,8 @@
+import os
+import subprocess
+import sys
 import tempfile
+import textwrap
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -343,3 +347,67 @@ class TestOptionValidation(TestCase):
         self.assertIn("/tmp/.oduit.toml", message)
         self.assertIn("--db-maxconn", message)
         self.assertIn("--db_maxconn", message)
+
+
+class TestPluginAutoloadIsolation(TestCase):
+    def test_plain_pytest_run_is_inert_without_oduit_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir)
+            (project / "test_plain.py").write_text("def test_plain():\n    assert True\n")
+
+            env = os.environ.copy()
+            repo_root = Path(__file__).resolve().parents[1]
+            env["PYTHONPATH"] = str(repo_root)
+            env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+
+            result = subprocess.run(
+                [sys.executable, "-m", "pytest", "-q", "-p", "pytest_oduit"],
+                cwd=project,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("1 passed", result.stdout)
+
+    def test_active_run_without_odoo_fails_with_clear_usage_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir)
+            (project / "test_plain.py").write_text("def test_plain():\n    assert True\n")
+            (project / ".oduit.toml").write_text("[]\n")
+
+            env = os.environ.copy()
+            repo_root = Path(__file__).resolve().parents[1]
+            env["PYTHONPATH"] = str(repo_root)
+            env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+            block_odoo_runner = textwrap.dedent(
+                """
+                import importlib.abc
+                import pytest
+                import sys
+
+                class BlockOdoo(importlib.abc.MetaPathFinder):
+                    def find_spec(self, fullname, path=None, target=None):
+                        if fullname == "odoo" or fullname.startswith("odoo."):
+                            raise ModuleNotFoundError("No module named 'odoo'")
+                        return None
+
+                sys.meta_path.insert(0, BlockOdoo())
+                raise SystemExit(pytest.main(["-q", "-p", "pytest_oduit"]))
+                """
+            )
+            result = subprocess.run(
+                [sys.executable, "-c", block_odoo_runner],
+                cwd=project,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            output = result.stdout + result.stderr
+            self.assertIn("pytest-oduit detected an Odoo/oduit test run", output)
+            self.assertIn("odoo", output)

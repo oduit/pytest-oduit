@@ -209,3 +209,6 @@ __marimo__/
 _version.py
 
 .serena/
+context_pytest_oduit*
+.taskledger/
+todo.md

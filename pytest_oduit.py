@@ -19,8 +19,12 @@ from unittest import mock
 
 import _pytest
 import _pytest.python
-import odoo
 import pytest
+
+try:
+    import odoo
+except ImportError:
+    odoo = None
 
 OdooVersionInfo = tuple[int, int, int, str, int, str]
 
@@ -39,24 +43,50 @@ def get_odoo_version() -> OdooVersionInfo:
         ...     # Odoo 18.0 or later specific code
         ...     pass
     """
+    if odoo is None:
+        return (999, 0, 0, "final", 0, "")
+
     try:
         return odoo.release.version_info  # type: ignore[attr-defined]
     except AttributeError:
         return (999, 0, 0, "final", 0, "")
 
 
-try:
-    import odoo.api
-    import odoo.modules.module
-    import odoo.modules.registry
-    import odoo.release
-    import odoo.service.db
-    import odoo.service.server
-    import odoo.sql_db
-    import odoo.tests.common
-    import odoo.tools
-except (ImportError, AttributeError):
-    pass
+if odoo is not None:
+    try:
+        import odoo.api
+        import odoo.modules.module
+        import odoo.modules.registry
+        import odoo.release
+        import odoo.service.db
+        import odoo.service.server
+        import odoo.sql_db
+        import odoo.tests.common
+        import odoo.tools
+    except (ImportError, AttributeError):
+        pass
+
+
+def _odoo_available() -> bool:
+    """Return whether the Odoo package is importable."""
+    return odoo is not None
+
+
+def _oduit_active(config) -> bool:
+    """Return whether this pytest run should activate Odoo integration."""
+    return bool(getattr(config, "_oduit_active", False))
+
+
+def _require_odoo_for_active_run(config_source: str) -> None:
+    """Raise a clear pytest error when an Odoo run is requested without Odoo."""
+    if _odoo_available():
+        return
+    raise pytest.UsageError(
+        "pytest-oduit detected an Odoo/oduit test run "
+        f"({config_source}), but the 'odoo' package is not importable. "
+        "Install/run pytest inside an Odoo environment, or remove the "
+        ".oduit.toml / --oduit-env trigger for non-Odoo test runs."
+    )
 
 
 def pytest_addoption(parser):
@@ -85,16 +115,24 @@ def pytest_addoption(parser):
 
 def _has_oduit_config():
     """Check if .oduit.toml file exists using oduit config loader."""
-    from oduit.config_loader import ConfigLoader
+    try:
+        from oduit.config_loader import ConfigLoader
+    except ImportError:
+        return (Path.cwd() / ".oduit.toml").is_file()
 
     return ConfigLoader().has_local_config()
 
 
 def _build_odoo_config_with_oduit_core(config):
     """Build Odoo configuration using oduit builders."""
-
-    from oduit.builders import ConfigProvider
-    from oduit.config_loader import ConfigLoader
+    try:
+        from oduit.builders import ConfigProvider
+        from oduit.config_loader import ConfigLoader
+    except ImportError as err:
+        raise pytest.UsageError(
+            "pytest-oduit could not import the 'oduit' package while building "
+            "Odoo configuration. Reinstall pytest-oduit with its dependencies."
+        ) from err
 
     # Start with configuration from .oduit.toml if it exists
     config_dict = {}
@@ -119,6 +157,9 @@ def _build_odoo_config_with_oduit_core(config):
 
 def _find_unknown_odoo_options(options: list[str]) -> list[str]:
     """Return generated options that are unknown to Odoo's OptionParser."""
+    if odoo is None:
+        return []
+
     parser = getattr(odoo.tools.config, "parser", None)
     long_opt = getattr(parser, "_long_opt", None)
     short_opt = getattr(parser, "_short_opt", None)
@@ -163,12 +204,13 @@ def _validate_generated_odoo_options(options: list[str], config_source: str) -> 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_cmdline_main(config):
-    if _has_oduit_config() or config.getoption("--oduit-env"):
+    config_source = config.getoption("--oduit-env") or str(Path.cwd() / ".oduit.toml")
+    config._oduit_active = bool(config.getoption("--oduit-env")) or _has_oduit_config()
+
+    if config._oduit_active:
+        _require_odoo_for_active_run(config_source)
         # Use oduit builders for command line construction
         options = _build_odoo_config_with_oduit_core(config)
-        config_source = config.getoption("--oduit-env") or str(
-            Path.cwd() / ".oduit.toml"
-        )
         value = config.getoption("--odoo-log-level")
         if value:
             options.append(f"--log-level={value}")
@@ -262,6 +304,10 @@ def pytest_cmdline_main(config):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
+    if not _oduit_active(item.config) or odoo is None:
+        yield
+        return
+
     if get_odoo_version() >= (18,):
         try:
             from odoo.tests import BaseCase
@@ -277,6 +323,9 @@ def pytest_runtest_call(item):
 
 @pytest.fixture(scope="module", autouse=True)
 def load_http(request):
+    if not _oduit_active(request.config) or odoo is None:
+        return
+
     if request.config.getoption("--odoo-http") and get_odoo_version() < (18,):
         odoo.service.server.start(stop=True)
         signal.signal(signal.SIGINT, signal.default_int_handler)
@@ -327,7 +376,11 @@ def _worker_db_name():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def load_registry():
+def load_registry(request):
+    if not _oduit_active(request.config) or odoo is None:
+        yield
+        return
+
     # Initialize the registry before running tests.
     # If we don't do that, the modules will be loaded *inside* of the first
     # test we run, which would trigger the launch of the postinstall tests
@@ -343,7 +396,11 @@ def load_registry():
 
 
 @pytest.fixture(scope="module", autouse=True)
-def enable_odoo_test_flag():
+def enable_odoo_test_flag(request):
+    if not _oduit_active(request.config) or odoo is None:
+        yield
+        return
+
     # When we run tests through Odoo, test_enable is always activated, and some
     # code might rely on this (for instance to selectively disable database
     # commits). When we run the tests through pytest, the flag is not
@@ -382,6 +439,9 @@ def support_subtest():
     using with pytest-odoo. So this fallback to the unitest.TestCase.subTest
     Context manager
     """
+    if odoo is None:
+        return
+
     try:
         from odoo.tests.case import TestCase
 
@@ -398,6 +458,9 @@ def disable_odoo_test_retry():
     Using `pytest-rerunfailures` we can use `--reruns` parameters
     if needs equivalent feature, so we remove such overload here.
     """
+    if odoo is None:
+        return
+
     try:
         from odoo.tests import BaseCase
 
@@ -433,8 +496,11 @@ def _extract_addon_name(test_path: Path) -> Optional[str]:
     return None
 
 
-def pytest_ignore_collect(collection_path: Path) -> Optional[bool]:
+def pytest_ignore_collect(collection_path: Path, config) -> Optional[bool]:
     """Do not collect tests of modules that are marked non installable."""
+    if not _oduit_active(config):
+        return None
+
     manifest_path = _find_manifest_path(collection_path)
     if not manifest_path:
         return None
