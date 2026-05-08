@@ -353,7 +353,9 @@ class TestPluginAutoloadIsolation(TestCase):
     def test_plain_pytest_run_is_inert_without_oduit_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             project = Path(temp_dir)
-            (project / "test_plain.py").write_text("def test_plain():\n    assert True\n")
+            (project / "test_plain.py").write_text(
+                "def test_plain():\n    assert True\n"
+            )
 
             env = os.environ.copy()
             repo_root = Path(__file__).resolve().parents[1]
@@ -375,7 +377,9 @@ class TestPluginAutoloadIsolation(TestCase):
     def test_active_run_without_odoo_fails_with_clear_usage_error(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             project = Path(temp_dir)
-            (project / "test_plain.py").write_text("def test_plain():\n    assert True\n")
+            (project / "test_plain.py").write_text(
+                "def test_plain():\n    assert True\n"
+            )
             (project / ".oduit.toml").write_text("[]\n")
 
             env = os.environ.copy()
