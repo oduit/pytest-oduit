@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import threading
+import unittest
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -443,13 +444,52 @@ def support_subtest():
         return
 
     @contextmanager
-    def _compat_subtest(self, *args, **kwargs):
+    def _outcome_test_part_executor(outcome, test_case, *, is_test):
+        for kwargs in ({"subTest": is_test}, {"isTest": is_test}, {}):
+            try:
+                executor = outcome.testPartExecutor(test_case, **kwargs)
+            except TypeError as err:
+                if kwargs and "unexpected keyword argument" in str(err):
+                    continue
+                raise
+            with executor:
+                yield
+            return
+
+    @contextmanager
+    def _compat_subtest(self, msg=unittest.case._subtest_msg_sentinel, **params):
         outcome = getattr(self, "_outcome", None)
-        if outcome is not None and not hasattr(outcome, "result_supports_subtests"):
-            result = getattr(outcome, "result", None)
-            outcome.result_supports_subtests = hasattr(result, "addSubTest")
-        with UnitTestTestCase.subTest(self, *args, **kwargs):
+        if outcome is None:
             yield
+            return
+
+        supports_subtests = getattr(outcome, "result_supports_subtests", None)
+        if supports_subtests is None:
+            result = getattr(outcome, "result", None)
+            supports_subtests = hasattr(result, "addSubTest")
+            outcome.result_supports_subtests = supports_subtests
+
+        if not supports_subtests:
+            yield
+            return
+
+        parent = getattr(self, "_subtest", None)
+        if parent is None:
+            params_map = unittest.case._OrderedChainMap(params)
+        else:
+            params_map = parent.params.new_child(params)
+        self._subtest = unittest.case._SubTest(self, msg, params_map)
+        try:
+            with _outcome_test_part_executor(outcome, self._subtest, is_test=True):
+                yield
+            if not getattr(outcome, "success", True):
+                result = getattr(outcome, "result", None)
+                if result is not None and getattr(result, "failfast", False):
+                    raise unittest.case._ShouldStop
+            elif getattr(outcome, "expectedFailure", False):
+                raise unittest.case._ShouldStop
+        finally:
+            self._subtest = parent
 
     try:
         from odoo.tests.case import TestCase

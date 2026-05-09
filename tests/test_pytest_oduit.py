@@ -230,6 +230,55 @@ class TestPytestOduit(TestCase):
 
         self.assertFalse(case._outcome.result_supports_subtests)
 
+    def test_support_subtest_falls_back_when_subtest_kwarg_is_unsupported(self):
+        from odoo.tests.case import TestCase as OdooTestCase
+
+        original_subtest = OdooTestCase.subTest
+
+        def restore_testcase_methods():
+            OdooTestCase.subTest = original_subtest
+
+        self.addCleanup(restore_testcase_methods)
+
+        with patch(
+            "pytest_oduit.get_odoo_version",
+            return_value=(18, 0, 0, "final", 0, ""),
+        ):
+            support_subtest()
+
+        calls = []
+
+        class Outcome:
+            def __init__(self):
+                self.result = SimpleNamespace(
+                    addSubTest=lambda *args, **kwargs: None,
+                    failfast=False,
+                )
+                self.success = True
+                self.expectedFailure = False
+
+            def testPartExecutor(self, _case, **kwargs):
+                if "subTest" in kwargs:
+                    raise TypeError(
+                        "testPartExecutor() got an unexpected keyword argument 'subTest'"
+                    )
+                calls.append(kwargs)
+
+                @contextmanager
+                def _executor():
+                    yield
+
+                return _executor()
+
+        case = OdooTestCase()
+        case._outcome = Outcome()
+        case._subtest = None
+        case.failureException = AssertionError
+        with case.subTest("compat"):
+            pass
+
+        self.assertEqual(calls, [{"isTest": True}])
+
     def test_support_subtest_patches_run_for_odoo_17(self):
         from odoo.tests.case import TestCase as OdooTestCase
 
