@@ -1,3 +1,6 @@
+[![PyPI - Version](https://img.shields.io/pypi/v/pytest-oduit)](https://pypi.org/project/pytest-oduit/)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytest-oduit)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/pytest-oduit)
 [![codecov](https://codecov.io/gh/oduit/pytest-oduit/graph/badge.svg?token=4VKN1JL1UM)](https://codecov.io/gh/oduit/pytest-oduit)
 
 # pytest-oduit
