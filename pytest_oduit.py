@@ -446,7 +446,8 @@ def support_subtest():
         from odoo.tests.case import TestCase
 
         TestCase.subTest = UnitTestTestCase.subTest
-        TestCase.run = UnitTestTestCase.run
+        if get_odoo_version() < (18,):
+            TestCase.run = UnitTestTestCase.run
     except ImportError:
         # Odoo <= 15.0
         pass
