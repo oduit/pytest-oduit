@@ -260,7 +260,8 @@ class TestPytestOduit(TestCase):
             def testPartExecutor(self, _case, **kwargs):
                 if "subTest" in kwargs:
                     raise TypeError(
-                        "testPartExecutor() got an unexpected keyword argument 'subTest'"
+                        "testPartExecutor() got an unexpected keyword argument "
+                        "'subTest'"
                     )
                 calls.append(kwargs)
 
