@@ -163,11 +163,13 @@ class TestPytestOduit(TestCase):
         from odoo.tests import BaseCase
         from odoo.tests.case import TestCase as OdooTestCase
 
-        self.assertTrue(OdooTestCase.subTest is TestCase.subTest)
-        self.assertTrue(BaseCase.subTest is TestCase.subTest)
         if get_odoo_version() < (18,):
+            self.assertTrue(OdooTestCase.subTest is TestCase.subTest)
+            self.assertTrue(BaseCase.subTest is TestCase.subTest)
             self.assertTrue(OdooTestCase.run is TestCase.run)
         else:
+            self.assertFalse(OdooTestCase.subTest is TestCase.subTest)
+            self.assertFalse(BaseCase.subTest is TestCase.subTest)
             self.assertFalse(OdooTestCase.run is TestCase.run)
 
     def test_support_subtest_import_error(self):
@@ -201,9 +203,53 @@ class TestPytestOduit(TestCase):
         ):
             support_subtest()
 
-        self.assertTrue(OdooTestCase.subTest is TestCase.subTest)
+        self.assertFalse(OdooTestCase.subTest is TestCase.subTest)
         self.assertTrue(OdooTestCase.run is original_run)
         self.assertFalse(OdooTestCase.run is TestCase.run)
+
+    def test_support_subtest_adds_missing_outcome_flag_for_odoo_18_plus(self):
+        from odoo.tests.case import TestCase as OdooTestCase
+
+        original_subtest = OdooTestCase.subTest
+
+        def restore_testcase_methods():
+            OdooTestCase.subTest = original_subtest
+
+        self.addCleanup(restore_testcase_methods)
+
+        with patch(
+            "pytest_oduit.get_odoo_version",
+            return_value=(18, 0, 0, "final", 0, ""),
+        ):
+            support_subtest()
+
+        case = OdooTestCase()
+        case._outcome = SimpleNamespace(result=None)
+        with case.subTest("compat"):
+            pass
+
+        self.assertFalse(case._outcome.result_supports_subtests)
+
+    def test_support_subtest_patches_run_for_odoo_17(self):
+        from odoo.tests.case import TestCase as OdooTestCase
+
+        original_run = OdooTestCase.run
+        original_subtest = OdooTestCase.subTest
+
+        def restore_testcase_methods():
+            OdooTestCase.run = original_run
+            OdooTestCase.subTest = original_subtest
+
+        self.addCleanup(restore_testcase_methods)
+
+        with patch(
+            "pytest_oduit.get_odoo_version",
+            return_value=(17, 0, 0, "final", 0, ""),
+        ):
+            support_subtest()
+
+        self.assertTrue(OdooTestCase.subTest is TestCase.subTest)
+        self.assertTrue(OdooTestCase.run is TestCase.run)
 
 
 class TestExtractAddonName(TestCase):

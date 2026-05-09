@@ -442,12 +442,23 @@ def support_subtest():
     if odoo is None:
         return
 
+    @contextmanager
+    def _compat_subtest(self, *args, **kwargs):
+        outcome = getattr(self, "_outcome", None)
+        if outcome is not None and not hasattr(outcome, "result_supports_subtests"):
+            result = getattr(outcome, "result", None)
+            outcome.result_supports_subtests = hasattr(result, "addSubTest")
+        with UnitTestTestCase.subTest(self, *args, **kwargs):
+            yield
+
     try:
         from odoo.tests.case import TestCase
 
-        TestCase.subTest = UnitTestTestCase.subTest
         if get_odoo_version() < (18,):
+            TestCase.subTest = UnitTestTestCase.subTest
             TestCase.run = UnitTestTestCase.run
+        else:
+            TestCase.subTest = _compat_subtest
     except ImportError:
         # Odoo <= 15.0
         pass
