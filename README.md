@@ -175,6 +175,21 @@ check your oduit config key names. Some Odoo DB options use underscores in their
 
 `pytest-oduit` now raises a clearer `pytest.UsageError` for invalid generated Odoo options and includes a hint for common DB option naming mistakes.
 
+## Usage in Harnesses
+
+### Codex
+Local network access needs to be activated, otherwise pytest is not able to
+communicate with the local postgres server.
+```
+codex -c sandbox_policy.network_access=enabled
+```
+
+```
+# Enable network access for the workspace
+[sandbox_workspace_write]
+network_access = true
+```
+
 ## Development
 
 ### Running Tests
