@@ -202,8 +202,10 @@ check your oduit config key names. Some Odoo DB options use underscores in their
 ## Usage in Harnesses
 
 ### Codex
+
 Local network access needs to be activated, otherwise pytest is not able to
 communicate with the local postgres server.
+
 ```
 codex -c sandbox_policy.network_access=enabled
 ```

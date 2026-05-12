@@ -124,6 +124,7 @@ class TestPytestOduit(TestCase):
         disable_odoo_test_retry()
         self.assertNotIn("run", BaseCase.__dict__)
         from odoo.tests.case import TestCase
+
         self.assertIs(BaseCase.run, TestCase.run)
 
     def test_disable_odoo_test_retry_ignore_run_doesnt_exists(self):
@@ -141,8 +142,8 @@ class TestPytestOduit(TestCase):
         disable_odoo_test_retry()
         self.assertNotIn("run", BaseCase.__dict__)
         from odoo.tests.case import TestCase
-        self.assertIs(BaseCase.run, TestCase.run)
 
+        self.assertIs(BaseCase.run, TestCase.run)
 
     def test_import_error(self):
         from odoo import tests
@@ -344,7 +345,9 @@ class TestHttpHelpers(TestCase):
                 server=SimpleNamespace(start=MagicMock(), server=fake_server),
                 db=SimpleNamespace(_create_empty_database=MagicMock()),
             ),
-            api=SimpleNamespace(Environment=SimpleNamespace(manage=_manage_environment)),
+            api=SimpleNamespace(
+                Environment=SimpleNamespace(manage=_manage_environment)
+            ),
         )
 
         options = {

@@ -307,13 +307,10 @@ def pytest_cmdline_main(config):
         # was True
         # at the time of calling start(), but we can't set it early or it triggers
         # at_install tests during module loading
-        if (
-            pytest_config.getoption("--odoo-http")
-            and (
+        if pytest_config.getoption("--odoo-http") and (
             odoo.service.server.server
             and hasattr(odoo.service.server.server, "httpd")
             and odoo.service.server.server.httpd is None
-            )
         ):
             odoo.service.server.server.http_spawn()
 
