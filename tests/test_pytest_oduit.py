@@ -20,6 +20,7 @@ from pytest_oduit import (
     _find_manifest_path,
     _find_unknown_odoo_options,
     _get_available_random_port,
+    _require_odoo_runtime_modules,
     _validate_generated_odoo_options,
     disable_odoo_test_retry,
     get_odoo_version,
@@ -326,6 +327,30 @@ class TestHttpHelpers(TestCase):
 
         self.assertEqual(fake_config["http_port"], port)
 
+    def test_require_odoo_runtime_modules_accepts_namespace_package(self):
+        module_names = (
+            "odoo.modules.module",
+            "odoo.modules.registry",
+            "odoo.service.db",
+            "odoo.service.server",
+            "odoo.sql_db",
+            "odoo.tests.common",
+            "odoo.tools",
+        )
+        modules = {name: types.ModuleType(name) for name in module_names}
+
+        with patch.dict(sys.modules, modules):
+            _require_odoo_runtime_modules("/tmp/.oduit.toml")
+
+    def test_require_odoo_runtime_modules_reports_missing_dependency(self):
+        with (
+            patch("pytest_oduit.importlib.import_module", side_effect=ImportError),
+            pytest.raises(pytest.UsageError) as exc_info,
+        ):
+            _require_odoo_runtime_modules("/tmp/.oduit.toml")
+
+        self.assertIn("could not import 'odoo.modules.module'", str(exc_info.value))
+
     def _run_cmdline_main(self, *, odoo_http):
         @contextmanager
         def _manage_environment():
@@ -370,6 +395,7 @@ class TestHttpHelpers(TestCase):
 
         with (
             patch("pytest_oduit._require_odoo_for_active_run"),
+            patch("pytest_oduit._require_odoo_runtime_modules"),
             patch("pytest_oduit._build_odoo_config_with_oduit_core", return_value=[]),
             patch("pytest_oduit._validate_generated_odoo_options"),
             patch("pytest_oduit.support_subtest"),

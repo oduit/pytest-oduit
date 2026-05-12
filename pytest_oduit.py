@@ -7,6 +7,7 @@
 
 
 import ast
+import importlib
 import os
 import signal
 import socket
@@ -55,18 +56,21 @@ def get_odoo_version() -> OdooVersionInfo:
 
 
 if odoo is not None:
-    try:
-        import odoo.api
-        import odoo.modules.module
-        import odoo.modules.registry
-        import odoo.release
-        import odoo.service.db
-        import odoo.service.server
-        import odoo.sql_db
-        import odoo.tests.common
-        import odoo.tools
-    except (ImportError, AttributeError):
-        pass
+    for module_name in (
+        "odoo.api",
+        "odoo.modules.module",
+        "odoo.modules.registry",
+        "odoo.release",
+        "odoo.service.db",
+        "odoo.service.server",
+        "odoo.sql_db",
+        "odoo.tests.common",
+        "odoo.tools",
+    ):
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            pass
 
 
 def _odoo_available() -> bool:
@@ -89,6 +93,27 @@ def _require_odoo_for_active_run(config_source: str) -> None:
         "Install/run pytest inside an Odoo environment, or remove the "
         ".oduit.toml / --oduit-env trigger for non-Odoo test runs."
     )
+
+
+def _require_odoo_runtime_modules(config_source: str) -> None:
+    """Import Odoo modules needed by an active pytest-oduit run."""
+    for module_name in (
+        "odoo.modules.module",
+        "odoo.modules.registry",
+        "odoo.service.db",
+        "odoo.service.server",
+        "odoo.sql_db",
+        "odoo.tests.common",
+        "odoo.tools",
+    ):
+        try:
+            importlib.import_module(module_name)
+        except ImportError as err:
+            raise pytest.UsageError(
+                "pytest-oduit detected an Odoo/oduit test run "
+                f"({config_source}), but could not import '{module_name}'. "
+                "Install/run pytest inside a complete Odoo environment."
+            ) from err
 
 
 def _get_available_random_port() -> int:
@@ -233,6 +258,7 @@ def pytest_cmdline_main(config):
 
     if pytest_config._oduit_active:
         _require_odoo_for_active_run(config_source)
+        _require_odoo_runtime_modules(config_source)
         # Use oduit builders for command line construction
         options = _build_odoo_config_with_oduit_core(pytest_config)
         value = pytest_config.getoption("--odoo-log-level")
