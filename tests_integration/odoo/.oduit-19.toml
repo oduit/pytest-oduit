@@ -1,0 +1,10 @@
+[binaries]
+odoo_bin = "odoo"
+
+[odoo_params]
+db_name = "pytest_oduit_19"
+db_host = "127.0.0.1"
+db_port = 5432
+db_user = "odoo"
+db_password = "odoo"
+addons_path = "tests_integration/odoo/addons"

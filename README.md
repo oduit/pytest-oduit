@@ -14,7 +14,7 @@ A pytest plugin for running Odoo tests with automatic Odoo setup and oduit integ
 - **Module path resolution**: Automatically resolves Odoo addon module paths for proper test discovery
 - **Test retry management**: Disables Odoo's built-in test retry mechanism to work seamlessly with pytest
 - **Distributed testing support**: Works with pytest-xdist for parallel test execution
-- **HTTP server support**: Optional Odoo HTTP server launch for integration tests
+- **HTTP server support**: Explicit Odoo HTTP server launch for `HttpCase` and integration tests
 - **Actionable config errors**: Surfaces clearer messages when generated Odoo options are invalid
 
 ## Installation
@@ -65,7 +65,7 @@ This plugin works also together `pytest-subtests` and `pytest-xdist`.
   - **`--odoo-install=module1,module2`**: Manually specify modules to install (disables auto-detection)
   - **`--odoo-install=""`**: Disable all module installation
 - `--oduit-env`: Path to an oduit config file (if omitted, uses local `.oduit.toml` in current directory)
-- `--odoo-http`: Enables http server for testing tours (only needed for Odoo < 18)
+- `--odoo-http`: Enables the Odoo HTTP server for `HttpCase` and integration tests
 
 ### Automatic Module Installation
 
@@ -160,6 +160,30 @@ pytest -n auto  # Run tests in parallel using all available CPUs
 
 The plugin automatically creates isolated database copies for each worker to prevent conflicts.
 
+### Integration testing
+
+Real-Odoo integration coverage lives under `tests_integration/odoo` and uses
+oduit config files instead of pytest-odoo-only flags.
+
+Prerequisites:
+
+- a reachable PostgreSQL server (for example `PGHOST=127.0.0.1`, `PGUSER=odoo`)
+- an Odoo 18 or 19 environment installable in the active Python environment
+- the repo addon path rendered as a comma-separated `addons_path` string in
+  `.oduit-18.toml` / `.oduit-19.toml`
+
+Useful commands:
+
+```bash
+tox -e py313-unit
+pytest --oduit-env tests_integration/odoo/.oduit-18.toml --odoo-install=pytest_oduit_test_module --odoo-http tests_integration/odoo/addons/pytest_oduit_test_module
+pytest --oduit-env tests_integration/odoo/.oduit-18.toml --odoo-install=pytest_oduit_test_module tests_integration/odoo/addons/pytest_oduit_test_module
+```
+
+The first integration command must pass the model, subtest, and HTTP coverage.
+The second command must still pass, but skip only the `HttpCase` test with a
+clear rerun hint.
+
 ### Troubleshooting
 
 If startup fails with an error like:
@@ -196,7 +220,8 @@ network_access = true
 
 ```bash
 cd pytest-oduit
-pytest
+PYTHONPATH=tests/mock/odoo:$PYTHONPATH pytest
+tox -e py313-unit
 ```
 
 ### Test Structure

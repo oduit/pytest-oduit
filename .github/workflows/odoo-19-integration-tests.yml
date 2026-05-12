@@ -5,12 +5,10 @@ jobs:
   odoo-tests:
     runs-on: ubuntu-24.04
     env:
-      DB: "oduit"
       PGUSER: odoo
       PGPASSWORD: odoo
       PGHOST: localhost
       PGPORT: 5432
-      ODOO: "./odoo/odoo-bin"
     services:
       postgres:
         image: postgres:15
@@ -27,16 +25,10 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: pytest-oduit
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Sleep for 10 seconds
-        run: sleep 10s
-      - name: DB Creation
-        run: createdb $DB
+          python-version: "3.12"
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -93,50 +85,7 @@ jobs:
             python3-xlrd \
             python3-zeep \
             python3-ldap
-
-      - name: Create virtual environment
-        run: |
-          python -m venv venv
-          echo "$GITHUB_WORKSPACE/venv/bin" >> $GITHUB_PATH
-
-      - name: Checkout Odoo
-        uses: actions/checkout@v4
-        with:
-          repository: odoo/odoo
-          ref: "19.0"
-          path: odoo
-          fetch-depth: 1
-
-      - name: Install Odoo dependencies
-        run: |
-          sed -i -E "s/(gevent==)21\.8\.0( ; sys_platform != 'win32' and python_version == '3.10')/\122.10.2\2/;s/(greenlet==)1.1.2( ; sys_platform != 'win32' and python_version == '3.10')/\12.0.2\2/" odoo/requirements.txt
-          venv/bin/pip install -r odoo/requirements.txt
-          venv/bin/pip install websocket-client
-          
-      - name: Install Odoo
-        run: |
-          venv/bin/pip install ./odoo
- 
-      - name: Install pytest-oduit
-        run: |
-          venv/bin/pip install ./pytest-oduit
-
-      - name: Create .oduit.toml configuration
-        run: |
-          cat > .oduit.toml << 'EOF'
-          [binaries]
-            odoo_bin = "odoo"
-          [odoo_params]
-            db_name = "oduit"
-            db_user = "odoo"
-            db_password = "odoo"
-            db_port = 5432
-            http_port = 8075
-            gevent_port = 8076
-            http_interface = "0.0.0.0"
-            addons_path = ["odoo/addons"]
-          EOF
-
-      - name: Run pytest tests locally
-        run: |
-          venv/bin/pytest --verbose --odoo-log-level info odoo/addons/calendar/
+      - name: Install tox
+        run: python -m pip install --upgrade pip tox
+      - name: Run Odoo 19 integration lane
+        run: tox -e integration-19

@@ -1,25 +1,32 @@
 import os
+import socket
 import subprocess
 import sys
 import tempfile
 import textwrap
+import types
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from _pytest import pathlib as pytest_pathlib
 
 from pytest_oduit import (
+    _configure_random_http_port,
     _extract_addon_name,
     _find_manifest_path,
     _find_unknown_odoo_options,
+    _get_available_random_port,
     _validate_generated_odoo_options,
     disable_odoo_test_retry,
     get_odoo_version,
     monkey_patch_resolve_pkg_root_and_module_name,
+    pytest_cmdline_main,
+    pytest_runtest_call,
+    pytest_runtest_setup,
     support_subtest,
 )
 
@@ -115,9 +122,9 @@ class TestPytestOduit(TestCase):
         self.addCleanup(restore_basecase_run)
 
         disable_odoo_test_retry()
-        with patch("odoo.tests.BaseCase._call_something") as mock:
-            BaseCase().run()
-            mock.assert_not_called()
+        self.assertNotIn("run", BaseCase.__dict__)
+        from odoo.tests.case import TestCase
+        self.assertIs(BaseCase.run, TestCase.run)
 
     def test_disable_odoo_test_retry_ignore_run_doesnt_exists(self):
         from odoo.tests import BaseCase
@@ -132,10 +139,10 @@ class TestPytestOduit(TestCase):
         del BaseCase.run
 
         disable_odoo_test_retry()
+        self.assertNotIn("run", BaseCase.__dict__)
+        from odoo.tests.case import TestCase
+        self.assertIs(BaseCase.run, TestCase.run)
 
-        with patch("odoo.tests.BaseCase._call_something") as mock:
-            BaseCase().run()
-            mock.assert_not_called()
 
     def test_import_error(self):
         from odoo import tests
@@ -205,7 +212,6 @@ class TestPytestOduit(TestCase):
 
         self.assertFalse(OdooTestCase.subTest is TestCase.subTest)
         self.assertTrue(OdooTestCase.run is original_run)
-        self.assertFalse(OdooTestCase.run is TestCase.run)
 
     def test_support_subtest_adds_missing_outcome_flag_for_odoo_18_plus(self):
         from odoo.tests.case import TestCase as OdooTestCase
@@ -300,6 +306,168 @@ class TestPytestOduit(TestCase):
 
         self.assertTrue(OdooTestCase.subTest is TestCase.subTest)
         self.assertTrue(OdooTestCase.run is TestCase.run)
+
+
+class TestHttpHelpers(TestCase):
+    def test_get_available_random_port_returns_bindable_port(self):
+        port = _get_available_random_port()
+        self.assertIsInstance(port, int)
+        self.assertGreater(port, 0)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", port))
+
+    def test_configure_random_http_port_sets_odoo_config(self):
+        fake_config = {}
+
+        with patch("pytest_oduit.odoo.tools.config", fake_config):
+            port = _configure_random_http_port()
+
+        self.assertEqual(fake_config["http_port"], port)
+
+    def _run_cmdline_main(self, *, odoo_http):
+        @contextmanager
+        def _manage_environment():
+            yield
+
+        class FakeOdooConfig(dict):
+            parser = SimpleNamespace(_long_opt={}, _short_opt={})
+
+            def parse_config(self, options):
+                self["parsed_options"] = options
+
+        fake_odoo_config = FakeOdooConfig(db_name="")
+        fake_server = SimpleNamespace(httpd=None, http_spawn=MagicMock())
+        fake_odoo = SimpleNamespace(
+            tools=SimpleNamespace(config=fake_odoo_config),
+            service=SimpleNamespace(
+                server=SimpleNamespace(start=MagicMock(), server=fake_server),
+                db=SimpleNamespace(_create_empty_database=MagicMock()),
+            ),
+            api=SimpleNamespace(Environment=SimpleNamespace(manage=_manage_environment)),
+        )
+
+        options = {
+            "--oduit-env": "/tmp/.oduit.toml",
+            "--odoo-log-level": "critical",
+            "--odoo-http": odoo_http,
+            "--odoo-install": "",
+        }
+
+        class FakePytestConfig:
+            args = []
+
+            def __init__(self, values):
+                self._values = values
+
+            def getoption(self, name):
+                return self._values.get(name)
+
+        config = FakePytestConfig(options)
+
+        with (
+            patch("pytest_oduit._require_odoo_for_active_run"),
+            patch("pytest_oduit._build_odoo_config_with_oduit_core", return_value=[]),
+            patch("pytest_oduit._validate_generated_odoo_options"),
+            patch("pytest_oduit.support_subtest"),
+            patch("pytest_oduit.disable_odoo_test_retry"),
+            patch("pytest_oduit.monkey_patch_resolve_pkg_root_and_module_name"),
+            patch("pytest_oduit.signal.signal"),
+            patch(
+                "pytest_oduit.get_odoo_version",
+                return_value=(18, 0, 0, "final", 0, ""),
+            ),
+            patch("pytest_oduit.odoo", fake_odoo),
+        ):
+            hook = pytest_cmdline_main(config)
+            next(hook)
+            with self.assertRaises(StopIteration):
+                next(hook)
+
+        return fake_odoo
+
+    def test_pytest_cmdline_main_does_not_spawn_http_without_option(self):
+        fake_odoo = self._run_cmdline_main(odoo_http=False)
+        fake_odoo.service.server.server.http_spawn.assert_not_called()
+        self.assertNotIn("http_port", fake_odoo.tools.config)
+
+    def test_pytest_cmdline_main_spawns_http_with_random_port_when_enabled(self):
+        fake_odoo = self._run_cmdline_main(odoo_http=True)
+        fake_odoo.service.server.server.http_spawn.assert_called_once_with()
+        self.assertIsInstance(fake_odoo.tools.config["http_port"], int)
+        self.assertGreater(fake_odoo.tools.config["http_port"], 0)
+
+
+class TestHttpCaseSkipping(TestCase):
+    @staticmethod
+    def _make_item(*, active, odoo_http, instance):
+        class FakeConfig:
+            def __init__(self):
+                self._oduit_active = active
+
+            def getoption(self, name):
+                if name == "--odoo-http":
+                    return odoo_http
+                return None
+
+        return SimpleNamespace(
+            config=FakeConfig(),
+            instance=instance,
+            nodeid="tests/test_http.py::TestHttp::test_case",
+        )
+
+    def test_pytest_runtest_setup_is_inert_for_inactive_run(self):
+        from odoo.tests.common import HttpCase
+
+        item = self._make_item(active=False, odoo_http=False, instance=HttpCase())
+        self.assertIsNone(pytest_runtest_setup(item))
+
+    def test_pytest_runtest_setup_does_not_skip_non_httpcase(self):
+        item = self._make_item(active=True, odoo_http=False, instance=object())
+        self.assertIsNone(pytest_runtest_setup(item))
+
+    def test_pytest_runtest_setup_skips_httpcase_without_http(self):
+        from odoo.tests.common import HttpCase
+
+        item = self._make_item(active=True, odoo_http=False, instance=HttpCase())
+        with pytest.raises(pytest.skip.Exception) as exc_info:
+            pytest_runtest_setup(item)
+
+        self.assertIn("--odoo-http", str(exc_info.value))
+
+    def test_pytest_runtest_setup_does_not_skip_httpcase_with_http(self):
+        from odoo.tests.common import HttpCase
+
+        item = self._make_item(active=True, odoo_http=True, instance=HttpCase())
+        self.assertIsNone(pytest_runtest_setup(item))
+
+    def test_pytest_runtest_setup_ignores_missing_httpcase_symbol(self):
+        item = self._make_item(active=True, odoo_http=False, instance=object())
+        fake_common = types.ModuleType("odoo.tests.common")
+
+        with patch.dict(sys.modules, {"odoo.tests.common": fake_common}):
+            self.assertIsNone(pytest_runtest_setup(item))
+
+
+class TestCurrentTestLifecycle(TestCase):
+    def test_pytest_runtest_call_sets_and_resets_current_test_for_odoo_18(self):
+        from odoo.tests import BaseCase
+
+        config = SimpleNamespace(_oduit_active=True, getoption=lambda name: None)
+        case = BaseCase()
+        item = SimpleNamespace(config=config, instance=case)
+
+        with patch(
+            "pytest_oduit.get_odoo_version",
+            return_value=(18, 0, 0, "final", 0, ""),
+        ):
+            hook = pytest_runtest_call(item)
+            next(hook)
+            self.assertIs(sys.modules["odoo"].modules.module.current_test, case)
+            with self.assertRaises(StopIteration):
+                next(hook)
+
+        self.assertFalse(sys.modules["odoo"].modules.module.current_test)
 
 
 class TestExtractAddonName(TestCase):

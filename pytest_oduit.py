@@ -9,6 +9,7 @@
 import ast
 import os
 import signal
+import socket
 import subprocess
 import threading
 import unittest
@@ -90,6 +91,23 @@ def _require_odoo_for_active_run(config_source: str) -> None:
     )
 
 
+def _get_available_random_port() -> int:
+    """Return an available TCP port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _configure_random_http_port() -> int:
+    """Configure a fresh HTTP port for the active Odoo test run."""
+    if odoo is None:
+        raise RuntimeError("Odoo must be available before configuring http_port")
+
+    port = _get_available_random_port()
+    odoo.tools.config["http_port"] = port
+    return port
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--odoo-log-level",
@@ -100,7 +118,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--odoo-http",
         action="store_true",
-        help="If pytest should launch an Odoo http server (only needed for Odoo < 18).",
+        help="Enable the Odoo HTTP server for HttpCase and integration tests.",
     )
     parser.addoption(
         "--oduit-env", action="store", help="Path of the Odoo configuration file"
@@ -205,18 +223,23 @@ def _validate_generated_odoo_options(options: list[str], config_source: str) -> 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_cmdline_main(config):
-    config_source = config.getoption("--oduit-env") or str(Path.cwd() / ".oduit.toml")
-    config._oduit_active = bool(config.getoption("--oduit-env")) or _has_oduit_config()
+    pytest_config = config
+    config_source = pytest_config.getoption("--oduit-env") or str(
+        Path.cwd() / ".oduit.toml"
+    )
+    pytest_config._oduit_active = bool(pytest_config.getoption("--oduit-env")) or (
+        _has_oduit_config()
+    )
 
-    if config._oduit_active:
+    if pytest_config._oduit_active:
         _require_odoo_for_active_run(config_source)
         # Use oduit builders for command line construction
-        options = _build_odoo_config_with_oduit_core(config)
-        value = config.getoption("--odoo-log-level")
+        options = _build_odoo_config_with_oduit_core(pytest_config)
+        value = pytest_config.getoption("--odoo-log-level")
         if value:
             options.append(f"--log-level={value}")
 
-        value_install = config.getoption("--odoo-install")
+        value_install = pytest_config.getoption("--odoo-install")
         if value_install is not None:
             # Explicit --odoo-install provided
             if value_install:
@@ -226,7 +249,7 @@ def pytest_cmdline_main(config):
         else:
             # No --odoo-install flag: auto-detect modules from test paths
             addon_names = set()
-            for arg in config.args:
+            for arg in pytest_config.args:
                 # Handle pytest node IDs (e.g., path/to/test.py::TestClass::test_method)
                 # Extract just the file path part before '::'
                 path_str = arg.split("::")[0]
@@ -250,6 +273,9 @@ def pytest_cmdline_main(config):
                 "Failed to parse Odoo options generated from oduit configuration "
                 f"({config_source}). Generated options: {rendered_options}"
             ) from err
+
+        if pytest_config.getoption("--odoo-http"):
+            _configure_random_http_port()
 
         config = odoo.tools.config  # type: ignore
 
@@ -282,9 +308,12 @@ def pytest_cmdline_main(config):
         # at the time of calling start(), but we can't set it early or it triggers
         # at_install tests during module loading
         if (
+            pytest_config.getoption("--odoo-http")
+            and (
             odoo.service.server.server
             and hasattr(odoo.service.server.server, "httpd")
             and odoo.service.server.server.httpd is None
+            )
         ):
             odoo.service.server.server.http_spawn()
 
@@ -301,6 +330,28 @@ def pytest_cmdline_main(config):
             yield
     else:
         yield
+
+
+def pytest_runtest_setup(item):
+    if not _oduit_active(item.config) or odoo is None:
+        return
+
+    if item.config.getoption("--odoo-http"):
+        return
+
+    instance = getattr(item, "instance", None)
+    if instance is None:
+        return
+
+    try:
+        from odoo.tests.common import HttpCase
+    except (ImportError, AttributeError):
+        return
+
+    if isinstance(instance, HttpCase):
+        pytest.skip(
+            f"{item.nodeid} is an Odoo HttpCase; rerun with --odoo-http to enable it"
+        )
 
 
 @pytest.hookimpl(hookwrapper=True)
